@@ -1,10 +1,10 @@
 import type * as Party from "partykit/server";
 
 
-type Player = { id: string; name: string; room: string; avatar: string; score: number, streak?: number }
+type Player = { id: string; name: string; room: string; avatar: string; score: number, streak?: number, status?: boolean }
 type Room = { name: string; count: number; players: Player[] };
 type PlayerCard = { id: string; content: string };
-type InfluencerCard = string[];
+type InfluencerCard = {villain: string, tactic:string[]};
 type tacticUsed = { tactic: string, player: Player};
 
 
@@ -14,7 +14,7 @@ export default class Server implements Party.Server {
   players:Player[]= []
   rooms: Room[] = [];
   playedCards: PlayerCard[] = [];
-  influencerCard: InfluencerCard = [];
+  influencerCard: InfluencerCard = {villain: "biost", tactic: []};
   tacticsUsed: tacticUsed[] = [];
   currentRound = 1;
   streakBonus = 50;
@@ -76,6 +76,7 @@ if (ctx.request.url.split("/")[5].split("?")[0] === "lobby") {
         conn.close();
     } else {
         conn.send(JSON.stringify({type: "announcement", text: `Welcome, ${conn.id}`}));
+        conn.send(JSON.stringify({type: "id", id: `id+${conn.id}` }));
         this.room.broadcast(JSON.stringify({type: "", room:this.room, roomCount:this.players.length}), [conn.id]);
     }
 }
@@ -111,8 +112,8 @@ console.log("Received message:", parsedContent);
             }));
           break;
         case 'playerEnters':
-          this.room.broadcast(JSON.stringify({ newPlayer: `Player joined: ${parsedContent.playerName}` }), [sender.id]);
-          sender.send(JSON.stringify({ id: `id+${sender.id}` }));
+          this.room.broadcast(JSON.stringify({ type: "announcement", text: `Player joined: ${parsedContent.playerName}` }), [sender.id]);
+          sender.send(JSON.stringify({type:"playerId", id: sender.id }));
           parsedContent.player.id = sender.id;
           parsedContent.player.score = 0;
 
@@ -131,7 +132,8 @@ console.log("Received message:", parsedContent);
           this.room.broadcast(JSON.stringify({ 
               type: 'roomUpdate', 
               room: room.name, 
-              roomData: room 
+              count: room.count, 
+              players: room.players 
           }));
           break;
         case 'playerLeft':
@@ -154,36 +156,44 @@ console.log("Received message:", parsedContent);
           }
           break;
 
-    //     case 'influencer':
-    //       console.log(parsedContent);
-    //       this.room.broadcast(`Influencer update: ${parsedContent.villain}`);
-    //       break;
-    //     case 'ready':
+        case 'influencer':
+          console.log(parsedContent);
+          this.influencerCard = parsedContent;
+          console.log("Influencer card set:", this.influencerCard);
+          this.room.broadcast(JSON.stringify({type: "villain", villain: parsedContent.villain}));
+          break;
+        case 'playerReady':
+          
+          this.players = this.players.map(player => 
+              player.id === sender.id ? { ...player, status: true } : player
+          );
+          console.log("Player ready:",  this.players);
+          this.room.broadcast(JSON.stringify({ type: 'playerReady', roomData: this.players }));
     //       this.room.broadcast(`Tactic update: ${parsedContent.card}`);
     //       this.playedCards.push({id: sender.id, content: parsedContent.card});
     //         this.room.broadcast(JSON.stringify({ready: "ready"}), [sender.id]);
-    //       break;
+          break;
     //     // case 'round-start':
     //     //   this.influencerCard = Array.isArray(parsedContent) ? parsedContent : [parsedContent];
     //     //   break;
-    //     case 'finish round':
-    //       let playerRound = {sender: sender.id, round: parsedContent.round};
-    //       if (parsedContent.round === this.currentRound && sender.id === playerRound.sender) {
-    //         const score = this.calculateScore(this.playedCards.filter(card => card.id === sender.id));
+        case 'endOfRound':
+          let playerRound = {sender: sender.id, round: parsedContent.round};
+        //   if (parsedContent.round === this.currentRound && sender.id === playerRound.sender) {
+        //     const score = this.calculateScore(this.playedCards.filter(card => card.id === sender.id));
             
-    //         sender.send(`score+${score}`);
-    //         this.room.broadcast(`finish`, [sender.id]);
+        //     sender.send(`score+${score}`);
+        //     this.room.broadcast(`finish`, [sender.id]);
 
-    //         this.scores = this.scores || {};
-    //         this.scores[sender.id] = score;
+        //     this.scores = this.scores || {};
+        //     this.scores[sender.id] = score;
 
-    //         if (Object.keys(this.scores).length === this.players.length) {
-    //           this.currentRound++;
-    //           this.scores = {};
-    //           this.room.broadcast(`round-complete`);
-    //         }
-    //       }
-    //       break;
+        //     if (Object.keys(this.scores).length === this.players.length) {
+        //       this.currentRound++;
+        //       this.scores = {};
+        //       this.room.broadcast(`round-complete`);
+        //     }
+        //   }
+          break;
     //     case 'undo':
     //         this.playedCards.filter((card) => card.id !== sender.id);
     //         this.room.broadcast(`undo+${parsedContent.count}`, [sender.id]);
