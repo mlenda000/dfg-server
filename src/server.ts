@@ -1,25 +1,35 @@
 import type * as Party from "partykit/server";
 
-
-type Player = { id: string; name: string; room: string; avatar: string; score: number, streak?: number, status?: boolean }
+type Player = {
+  id: string;
+  name: string;
+  room: string;
+  avatar: string;
+  score: number;
+  streak?: number;
+  hasStreak?: boolean;
+  status?: boolean;
+  tacticUsed?: string[];
+  wasCorrect?: boolean;
+  scoreUpdated?: boolean;
+};
 type Room = { name: string; count: number; players: Player[] };
 type PlayerCard = { id: string; content: string };
-type InfluencerCard = {villain: string, tactic:string[]};
-type tacticUsed = { tactic: string, player: Player};
-
+type InfluencerCard = { villain: string; tactic: string[] };
+type tacticUsed = { tactic: string; player: Player };
 
 export default class Server implements Party.Server {
   constructor(readonly room: Party.Room) {}
 
-  players:Player[]= []
+  players: Player[] = [];
   rooms: Room[] = [];
   playedCards: PlayerCard[] = [];
-  influencerCard: InfluencerCard = {villain: "biost", tactic: []};
+  influencerCard: InfluencerCard = { villain: "biost", tactic: [] };
   tacticsUsed: tacticUsed[] = [];
   currentRound = 1;
-  streakBonus = 50;
-  correctAnswer = 100;
-  wrongAnswer = -50;
+  streakBonus = this.currentRound < 5 ? 1 : this.currentRound < 10 ? 2 : 3;
+  correctAnswer = 2;
+  wrongAnswer = -1;
 
   getPlayers() {
     return this.players;
@@ -32,34 +42,99 @@ export default class Server implements Party.Server {
   getInfluencerCards() {
     return this.influencerCard;
   }
+  resetPlayerForNextRound(player: Player) {
+    player.tacticUsed = [];
+    player.status = false;
+  }
 
-// calculateScore(playerCards: {id: string, content: Number}[]): number {
-//    let score = content?.score || 0;
-//     let correct = false;
-//     playerCards.forEach(card => {
-//         if (card === tacticUsed){
-//             correct = true;
-//         }else{
-//             correct = false;
-//         }
+  calculateScore(players: Player[]) {
+    // Ensure all players have a scoreUpdated property
+    this.players = this.players.map((existingPlayer) => {
+      const player = players.find((p) => p.id === existingPlayer.id);
 
-//         if (correct) {
-//             score += 100;
-//         }else if (score >= 50){
-//             score -= 50;
-//         }else {
-//             score = 0;
-//         }
-//     }
-//     return score;
-//   } 
+      // If the player is not found, return the existing player
+      if (!player) return existingPlayer;
+
+      // score will be points for this round currentScore is the players score prior to this round if they have one
+      let score = 0;
+      let currentScore = existingPlayer.score || 0;
+
+      if (this.influencerCard && this.influencerCard.tactic.length > 0) {
+        // set for the streak as long as one card is correct the streak will continue
+        let anyCorrect = false;
+
+        // Filter out correct and wrong tactics
+        const correctTactics =
+          player.tacticUsed?.filter((tactic) =>
+            this.influencerCard.tactic.includes(tactic)
+          ) || [];
+        const wrongTactics =
+          player.tacticUsed?.filter(
+            (tactic) => !this.influencerCard.tactic.includes(tactic)
+          ) || [];
+
+        // Process correct tactics first
+        if (correctTactics.length > 0) {
+          correctTactics.forEach(() => {
+            score += this.correctAnswer * 50;
+            anyCorrect = true;
+          });
+        }
+
+        // Process wrong tactics second
+        if (wrongTactics.length > 0) {
+          wrongTactics.forEach(() => {
+            score += this.wrongAnswer * 50;
+          });
+        }
+
+        // sets the player was correct if any of the tactics were correct
+        player.wasCorrect = anyCorrect;
+      }
+      // add the players current score to the new points for this round
+      let updatedScore = currentScore + score;
+      updatedScore = Math.max(updatedScore, 0); // Ensure score doesn't go below 0;
+
+      //Once per round update if a streak has continued
+      const streak =
+        updatedScore > currentScore &&
+        !existingPlayer.scoreUpdated &&
+        player.wasCorrect
+          ? (existingPlayer.streak || 0) + 1
+          : 0;
+
+      const updatedPlayer: Player = {
+        ...existingPlayer,
+        score: updatedScore,
+        streak,
+        hasStreak: streak >= 3, // Set hasStreak if streak is greater than 3
+        scoreUpdated: true, // Mark score as updated
+        wasCorrect: player.wasCorrect || false, // Ensure wasCorrect is set
+      };
+
+      if (updatedPlayer?.hasStreak) {
+        updatedPlayer.score += this.streakBonus * 50; // Add streak bonus
+      }
+
+      this.resetPlayerForNextRound(updatedPlayer);
+      console.log(
+        `Player ${updatedPlayer.name} score updated: ${updatedPlayer.score}`
+      );
+
+      return updatedPlayer;
+    });
+  }
+
+  areAllScoresUpdated(players: Player[]): boolean {
+    return players.every((player) => player.scoreUpdated);
+  }
 
   parseContent(content: string): any {
     try {
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed)) {
         return parsed;
-      } else if (typeof parsed === 'object') {
+      } else if (typeof parsed === "object") {
         return parsed;
       }
     } catch (e) {
@@ -69,154 +144,215 @@ export default class Server implements Party.Server {
   }
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
-if (ctx.request.url.split("/")[5].split("?")[0] === "lobby") {
-} else {
-    if (this.players.length >= 5) {
-        conn.send(JSON.stringify({type: "announcement", text: `Room is full. Only 5 players are allowed.`}));
-        conn.close();
+    if (ctx.request.url.split("/")[5].split("?")[0] === "lobby") {
     } else {
-        conn.send(JSON.stringify({type: "announcement", text: `Welcome, ${conn.id}`}));
-        conn.send(JSON.stringify({type: "id", id: `id+${conn.id}` }));
-        this.room.broadcast(JSON.stringify({type: "", room:this.room, roomCount:this.players.length}), [conn.id]);
+      if (this.players.length >= 5) {
+        conn.send(
+          JSON.stringify({
+            type: "announcement",
+            text: `Room is full. Only 5 players are allowed.`,
+          })
+        );
+        conn.close();
+      } else {
+        conn.send(
+          JSON.stringify({ type: "announcement", text: `Welcome, ${conn.id}` })
+        );
+        conn.send(JSON.stringify({ type: "id", id: `id+${conn.id}` }));
+        this.room.broadcast(
+          JSON.stringify({
+            type: "",
+            room: this.room,
+            roomCount: this.players.length,
+          }),
+          [conn.id]
+        );
+      }
     }
-}
-    this.room.broadcast(JSON.stringify({type: "announcement", text:`Heads up! ${conn.id} joined the party!`}));
-}
-  
+    this.room.broadcast(
+      JSON.stringify({
+        type: "announcement",
+        text: `Heads up! ${conn.id} joined the party!`,
+      })
+    );
+  }
 
   onMessage(message: string, sender: Party.Connection) {
     console.log(message, "message received ---------------------");
     const parsedContent = this.parseContent(message);
-console.log("Received message:", parsedContent);
+    console.log("Received message:", parsedContent);
     switch (parsedContent?.type) {
-        case 'enteredLobby':
-            console.log(parsedContent, "entered lobby ---------------------");
-            const roomCounts: Record<string, Room> = {};
+      case "enteredLobby":
+        console.log(parsedContent, "entered lobby ---------------------");
+        const roomCounts: Record<string, Room> = {};
 
-            this.players.forEach(player => {
-                if (!roomCounts[player.room]) {
-                    roomCounts[player.room] = { name: player.room, count: 0, players: [] };
-                }
-                roomCounts[player.room].players.push(player);
-                roomCounts[player.room].count++;
-            });
-
-            const roomData = roomCounts[parsedContent.room] || { name: parsedContent.room, count: 0, players: [] };
-            console.log("Room data:", roomData);
-
-            this.room.broadcast(JSON.stringify({ 
-                type: 'lobbyUpdate',
-                room: parsedContent.room,
-                count: roomData.count,  
-                roomData 
-            }));
-          break;
-        case 'playerEnters':
-          this.room.broadcast(JSON.stringify({ type: "announcement", text: `Player joined: ${parsedContent.playerName}` }), [sender.id]);
-          sender.send(JSON.stringify({type:"playerId", id: sender.id }));
-          parsedContent.player.id = sender.id;
-          parsedContent.player.score = 0;
-
-          // Add player to the room they joined
-          let room = this.rooms.find(r => r.name === parsedContent.room);
-          if (!room) {
-              room = { name: parsedContent.room, count: 0, players: [] };
-              this.rooms.push(room);
+        this.players.forEach((player) => {
+          if (!roomCounts[player.room]) {
+            roomCounts[player.room] = {
+              name: player.room,
+              count: 0,
+              players: [],
+            };
           }
-          room.players.push(parsedContent.player);
-          room.count++;
+          roomCounts[player.room].players.push(player);
+          roomCounts[player.room].count++;
+        });
 
-          this.players.push(parsedContent.player);
+        const roomData = roomCounts[parsedContent.room] || {
+          name: parsedContent.room,
+          count: 0,
+          players: [],
+        };
+        console.log("Room data:", roomData);
 
-          // Broadcast updated room data to all players in the room
-          this.room.broadcast(JSON.stringify({ 
-              type: 'roomUpdate', 
-              room: room.name, 
-              count: room.count, 
-              players: room.players 
-          }));
-          break;
-        case 'playerLeft':
-          this.players = this.players.filter(player => player.id !== sender.id);
-          this.room.broadcast(JSON.stringify({ type: 'playerLeft', playerId: sender.id }));
-          // Update room data after player leaves
-          const updatedRoom = this.rooms.find(r => r.name === parsedContent.room);
-          if (updatedRoom) {
-              updatedRoom.players = updatedRoom.players.filter(player => player.id !== sender.id);
-              updatedRoom.count = updatedRoom.players.length;
-              this.room.broadcast(JSON.stringify({
-                  type: 'roomUpdate',
-                  room: updatedRoom.name,
-                  roomData: updatedRoom
-              }));
-              // If the room is empty, remove it from the list
-              if (updatedRoom.count === 0) {
-                  this.rooms = this.rooms.filter(r => r.name !== updatedRoom.name);
-              }
-          }
-          break;
+        this.room.broadcast(
+          JSON.stringify({
+            type: "lobbyUpdate",
+            room: parsedContent.room,
+            count: roomData.count,
+            roomData,
+          })
+        );
+        break;
+      case "playerEnters":
+        this.room.broadcast(
+          JSON.stringify({
+            type: "announcement",
+            text: `Player joined: ${parsedContent.playerName}`,
+          }),
+          [sender.id]
+        );
+        sender.send(JSON.stringify({ type: "playerId", id: sender.id }));
+        parsedContent.player.id = sender.id;
+        parsedContent.player.score = 0;
 
-        case 'influencer':
-          console.log(parsedContent);
-          this.influencerCard = parsedContent;
-          console.log("Influencer card set:", this.influencerCard);
-          this.room.broadcast(JSON.stringify({type: "villain", villain: parsedContent.villain}));
-          break;
-        case 'playerReady':
-          
-          this.players = this.players.map(player => 
-              player.id === sender.id ? { ...player, status: true } : player
+        // Add player to the room they joined
+        let room = this.rooms.find((r) => r.name === parsedContent.room);
+        if (!room) {
+          room = { name: parsedContent.room, count: 0, players: [] };
+          this.rooms.push(room);
+        }
+        room.players.push(parsedContent.player);
+        room.count++;
+
+        this.players.push(parsedContent.player);
+
+        // Broadcast updated room data to all players in the room
+        this.room.broadcast(
+          JSON.stringify({
+            type: "roomUpdate",
+            room: room.name,
+            count: room.count,
+            players: room.players,
+          })
+        );
+        break;
+      case "playerLeft":
+        //TODO: Handle player leaving the room
+        this.players = this.players.filter((player) => player.id !== sender.id);
+        this.room.broadcast(
+          JSON.stringify({ type: "playerLeft", playerId: sender.id })
+        );
+        // Update room data after player leaves
+        const updatedRoom = this.rooms.find(
+          (r) => r.name === parsedContent.room
+        );
+        if (updatedRoom) {
+          updatedRoom.players = updatedRoom.players.filter(
+            (player) => player.id !== sender.id
           );
-          console.log("Player ready:",  this.players);
-          this.room.broadcast(JSON.stringify({ type: 'playerReady', roomData: this.players }));
-    //       this.room.broadcast(`Tactic update: ${parsedContent.card}`);
-    //       this.playedCards.push({id: sender.id, content: parsedContent.card});
-    //         this.room.broadcast(JSON.stringify({ready: "ready"}), [sender.id]);
-          break;
-    //     // case 'round-start':
-    //     //   this.influencerCard = Array.isArray(parsedContent) ? parsedContent : [parsedContent];
-    //     //   break;
-        case 'endOfRound':
-          let playerRound = {sender: sender.id, round: parsedContent.round};
-        //   if (parsedContent.round === this.currentRound && sender.id === playerRound.sender) {
-        //     const score = this.calculateScore(this.playedCards.filter(card => card.id === sender.id));
-            
-        //     sender.send(`score+${score}`);
-        //     this.room.broadcast(`finish`, [sender.id]);
+          updatedRoom.count = updatedRoom.players.length;
+          this.room.broadcast(
+            JSON.stringify({
+              type: "roomUpdate",
+              room: updatedRoom.name,
+              roomData: updatedRoom,
+            })
+          );
+          // If the room is empty, remove it from the list
+          if (updatedRoom.count === 0) {
+            this.rooms = this.rooms.filter((r) => r.name !== updatedRoom.name);
+          }
+        }
+        break;
 
-        //     this.scores = this.scores || {};
-        //     this.scores[sender.id] = score;
+      case "influencer":
+        console.log(parsedContent);
+        this.influencerCard = parsedContent;
+        console.log("Influencer card set:", this.influencerCard);
+        this.room.broadcast(
+          JSON.stringify({ type: "villain", villain: parsedContent.villain })
+        );
+        break;
+      case "roundStart":
+        //TODO: Handle round start logic
+        console.log("Round started", parsedContent);
 
-        //     if (Object.keys(this.scores).length === this.players.length) {
-        //       this.currentRound++;
-        //       this.scores = {};
-        //       this.room.broadcast(`round-complete`);
-        //     }
-        //   }
-          break;
-    //     case 'undo':
-    //         this.playedCards.filter((card) => card.id !== sender.id);
-    //         this.room.broadcast(`undo+${parsedContent.count}`, [sender.id]);
-    //     case 'reset':
-    //       this.players = [{id: '', playerName: '', room: '', avatarImg: "", score: 0 }];
-    //       this.playedCards = [{id:"", content: ""}];
-    //       this.influencerCard = [''];
-    //       break;
-    //     case 'leaveRoom':
-    //         this.players = this.players.filter(player => player.id !== sender.id);
-    //         this.room.broadcast(JSON.stringify({room:parsedContent.room, roomCount: Number(this.players.length)}));
-    //     case 'end':
-    //       this.room.broadcast(`Game over: ${parsedContent}`);
-    //       break;
-        default:
-          console.log(`Unknown message type: ${parsedContent?.type}`);
-    //   }
+        break;
+      case "playerReady":
+        this.players = this.players.map((player) => {
+          console.log(sender.id, "sender id");
+          console.log(player.id, "player id");
+          console.log(player.id === sender.id);
+          if (player.id === sender.id) {
+            player.status = true; // Set the sender's player status to true
+          }
+
+          const updatedPlayer = parsedContent.players.find(
+            (p: Player) => p.id === player.id
+          );
+          updatedPlayer.status = player.status; // Ensure the status is preserved
+          return updatedPlayer ? { ...player, ...updatedPlayer } : player;
+        });
+        console.log(this.players, "players after ready status update");
+        this.room.broadcast(
+          JSON.stringify({
+            type: "playerReady",
+            roomData: this.players,
+            sender: sender.id,
+          })
+        );
+        break;
+      case "allReady":
+        const allReady = this.players.every((player) => player.status);
+        this.room.broadcast(
+          JSON.stringify({ type: "allReady", roomData: allReady })
+        );
+        break;
+
+      case "endOfRound":
+        console.log("End of round reached", parsedContent);
+        if (Array.isArray(parsedContent.players)) {
+          this.calculateScore(parsedContent.players);
+          console.log(this.players, "players after score calculation");
+
+          if (this.areAllScoresUpdated(this.players)) {
+            this.room.broadcast(
+              JSON.stringify({
+                type: "scoreUpdate",
+                players: this.players,
+              })
+            );
+          } else {
+            console.error("Not all players have their scores updated");
+          }
+        } else {
+          console.error("Invalid players data in parsedContent");
+        }
+        break;
+      default:
+        console.log(`Unknown message type: ${parsedContent?.type}`);
+        break;
     }
-}
-  
+  }
 
   onClose(connection: Party.Connection) {
-    this.room.broadcast(JSON.stringify({type: "announcement", text:`So sad! ${connection.id} left the party!`}));
+    this.room.broadcast(
+      JSON.stringify({
+        type: "announcement",
+        text: `So sad! ${connection.id} left the party!`,
+      })
+    );
   }
 }
 
