@@ -12,6 +12,7 @@ type Player = {
   tacticUsed?: string[];
   wasCorrect?: boolean;
   scoreUpdated?: boolean;
+  streakUpdated?: boolean;
 };
 type Room = {
   name: string;
@@ -71,10 +72,12 @@ export default class Server implements Party.Server {
       // score will be points for this round currentScore is the players score prior to this round if they have one
       let score = 0;
       let currentScore = existingPlayer.score || 0;
+      let anyCorrect = false;
+      player.streakUpdated = false;
+      player.scoreUpdated = false;
 
       if (this.influencerCard && this.influencerCard.tactic.length > 0) {
         // set for the streak as long as one card is correct the streak will continue
-        let anyCorrect = false;
 
         // Filter out correct and wrong tactics
         const correctTactics =
@@ -105,6 +108,7 @@ export default class Server implements Party.Server {
           });
         }
 
+        console.log(anyCorrect, "anyCorrect");
         // sets the player was correct if any of the tactics were correct
         player.wasCorrect = anyCorrect;
       }
@@ -114,8 +118,8 @@ export default class Server implements Party.Server {
 
       //Once per round update if a streak has continued
       const streak =
-        updatedScore > currentScore && player.scoreUpdated && player.wasCorrect
-          ? (existingPlayer.streak || 0) + 1
+        updatedScore > currentScore && !player.streakUpdated && anyCorrect
+          ? (player.streak || 0) + 1
           : 0;
 
       const updatedPlayer: Player = {
@@ -124,7 +128,8 @@ export default class Server implements Party.Server {
         streak,
         hasStreak: streak >= 3, // Set hasStreak if streak is greater than 3
         scoreUpdated: true, // Mark score as updated
-        wasCorrect: player.wasCorrect || false, // Ensure wasCorrect is set
+        streakUpdated: true, // Mark streak as updated
+        wasCorrect: player.wasCorrect, // Ensure wasCorrect is set
       };
 
       if (updatedPlayer?.hasStreak) {
@@ -133,7 +138,7 @@ export default class Server implements Party.Server {
 
       this.resetPlayerForNextRound(updatedPlayer);
       console.log(
-        `Player ${updatedPlayer.name} score updated: ${updatedPlayer.score}`
+        `Player ${updatedPlayer.name} score updated: ${updatedPlayer.score} streak: ${updatedPlayer.streak}`
       );
 
       return updatedPlayer;
@@ -340,7 +345,10 @@ export default class Server implements Party.Server {
         );
         break;
       case "startingDeck":
-        if (!this.shuffledDeck.isShuffled && !this.deckReady.length) {
+        if (
+          (!this.shuffledDeck.isShuffled && this.deckReady.length === 0) ||
+          !this.deckReady
+        ) {
           this.deckReady = shuffleInfluencerDeck(parsedContent.data);
           this.shuffledDeck = {
             type: "shuffledDeck",
