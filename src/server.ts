@@ -371,6 +371,14 @@ export default class Server implements Party.Server {
         text: `So sad! ${connection.id} left the party!`,
       })
     );
+    this.players = this.players.filter((player) => player.id !== connection.id);
+    this.room.broadcast(
+      JSON.stringify({
+        type: "playerLeft",
+        playerId: connection.id,
+      })
+    );
+    // Update room data after player leaves
   }
 }
 
