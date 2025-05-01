@@ -13,7 +13,13 @@ type Player = {
   wasCorrect?: boolean;
   scoreUpdated?: boolean;
 };
-type Room = { name: string; count: number; players: Player[] };
+type Room = {
+  name: string;
+  count: number;
+  players: Player[];
+  deck?: shuffledDeck;
+  round?: number;
+};
 type PlayerCard = { id: string; content: string };
 type InfluencerCard = { villain: string; tactic: string[] };
 type tacticUsed = { tactic: string; player: Player };
@@ -81,17 +87,21 @@ export default class Server implements Party.Server {
           ) || [];
 
         // Process correct tactics first
-        if (correctTactics.length > 0) {
+        if (correctTactics.length > 0 && !player.scoreUpdated) {
           correctTactics.forEach(() => {
             score += this.correctAnswer * 50;
             anyCorrect = true;
+            if (wrongTactics.length === 0) {
+              player.scoreUpdated = true; // Mark score as updated if no wrong tactics
+            }
           });
         }
 
         // Process wrong tactics second
-        if (wrongTactics.length > 0) {
+        if (wrongTactics.length > 0 && !player.scoreUpdated) {
           wrongTactics.forEach(() => {
             score += this.wrongAnswer * 50;
+            player.scoreUpdated = true; // Mark score as updated if there are wrong tactics
           });
         }
 
@@ -104,9 +114,7 @@ export default class Server implements Party.Server {
 
       //Once per round update if a streak has continued
       const streak =
-        updatedScore > currentScore &&
-        !existingPlayer.scoreUpdated &&
-        player.wasCorrect
+        updatedScore > currentScore && player.scoreUpdated && player.wasCorrect
           ? (existingPlayer.streak || 0) + 1
           : 0;
 
@@ -185,12 +193,11 @@ export default class Server implements Party.Server {
   }
 
   onMessage(message: string, sender: Party.Connection) {
-    console.log(message, "message received ---------------------");
     const parsedContent = this.parseContent(message);
-    console.log("Received message:", parsedContent);
+
     switch (parsedContent?.type) {
       case "enteredLobby":
-        console.log(parsedContent, "entered lobby ---------------------");
+        // console.log(parsedContent, "entered lobby ---------------------");
         const roomCounts: Record<string, Room> = {};
 
         this.players.forEach((player) => {
@@ -210,7 +217,7 @@ export default class Server implements Party.Server {
           count: 0,
           players: [],
         };
-        console.log("Room data:", roomData);
+        // console.log("Room data:", roomData);
 
         this.room.broadcast(
           JSON.stringify({
@@ -253,7 +260,16 @@ export default class Server implements Party.Server {
             players: room.players,
           })
         );
-        sender.send(JSON.stringify(this.shuffledDeck));
+        const currentDeck = this.rooms.find(
+          (room) => room.name === parsedContent.room
+        )?.deck;
+        if (currentDeck) {
+          console.log("Current deck found:", currentDeck);
+          sender.send(JSON.stringify(currentDeck));
+        } else {
+          console.error(`Deck not found for room: ${parsedContent.room}`);
+        }
+        // sender.send(JSON.stringify(this.shuffledDeck));
         break;
       case "playerLeft":
         //TODO: Handle player leaving the room
@@ -272,7 +288,7 @@ export default class Server implements Party.Server {
           updatedRoom.count = updatedRoom.players.length;
           this.room.broadcast(
             JSON.stringify({
-              type: "roomUpdate",
+              type: "roomUpdate-PlayerLeft",
               room: updatedRoom.name,
               count: updatedRoom.count,
               roomData: updatedRoom.players,
@@ -286,23 +302,18 @@ export default class Server implements Party.Server {
         break;
 
       case "influencer":
-        console.log(parsedContent);
+        // console.log(parsedContent);
         this.influencerCard = parsedContent;
-        console.log("Influencer card set:", this.influencerCard);
+        // console.log("Influencer card set:", this.influencerCard);
         this.room.broadcast(
           JSON.stringify({ type: "villain", villain: parsedContent.villain })
         );
         break;
-      case "roundStart":
-        //TODO: Handle round start logic
-        console.log("Round started", parsedContent);
-
-        break;
       case "playerReady":
         this.players = this.players.map((player) => {
-          console.log(sender.id, "sender id");
-          console.log(player.id, "player id");
-          console.log(player.id === sender.id);
+          //   console.log(sender.id, "sender id");
+          //   console.log(player.id, "player id");
+          //   console.log(player.id === sender.id);
           if (player.id === sender.id) {
             player.status = true; // Set the sender's player status to true
           }
@@ -313,7 +324,7 @@ export default class Server implements Party.Server {
           updatedPlayer.status = player.status; // Ensure the status is preserved
           return updatedPlayer ? { ...player, ...updatedPlayer } : player;
         });
-        console.log(this.players, "players after ready status update");
+        // console.log(this.players, "players after ready status update");
         this.room.broadcast(
           JSON.stringify({
             type: "playerReady",
@@ -337,14 +348,27 @@ export default class Server implements Party.Server {
             isShuffled: true,
           };
         }
+
+        let currentRoom = this.rooms.find((r) => r.name === parsedContent.room);
+        console.log(currentRoom, "currentRoom in startingDeck");
+        if (currentRoom && !currentRoom.deck) {
+          currentRoom.deck = this.shuffledDeck;
+          console.log(currentRoom, "currentRoom after deck assignment");
+          this.rooms = this.rooms.map((room) =>
+            room.name === currentRoom.name ? currentRoom : room
+          );
+        } else {
+          console.error(`Room ${parsedContent.room} not found.`);
+        }
+
         this.room.broadcast(JSON.stringify(this.shuffledDeck));
 
         break;
       case "endOfRound":
-        console.log("End of round reached", parsedContent);
+        // console.log("End of round reached", parsedContent);
         if (Array.isArray(parsedContent.players)) {
           this.calculateScore(parsedContent.players);
-          console.log(this.players, "players after score calculation");
+          //   console.log(this.players, "players after score calculation");
 
           if (this.areAllScoresUpdated(this.players)) {
             this.room.broadcast(
@@ -374,10 +398,26 @@ export default class Server implements Party.Server {
       })
     );
     this.players = this.players.filter((player) => player.id !== connection.id);
+    const room = this.rooms.find((r) =>
+      r.players.some((player) => player.id === connection.id)
+    );
+
+    if (room) {
+      room.players = room.players.filter(
+        (player) => player.id !== connection.id
+      );
+      room.count = room.players.length;
+
+      //   if (room.count === 0) {
+      //     this.rooms = this.rooms.filter((r) => r.name !== room.name);
+      //   }
+    }
     this.room.broadcast(
       JSON.stringify({
-        type: "playerLeft",
-        playerId: connection.id,
+        type: "roomUpdate-PlayerLeft",
+        room: this.room.name,
+        count: this.players.length,
+        roomData: this.players,
       })
     );
     // Update room data after player leaves
