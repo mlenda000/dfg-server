@@ -253,6 +253,7 @@ export default class Server implements Party.Server {
             players: room.players,
           })
         );
+        sender.send(JSON.stringify(this.shuffledDeck));
         break;
       case "playerLeft":
         //TODO: Handle player leaving the room
