@@ -17,6 +17,7 @@ type Room = { name: string; count: number; players: Player[] };
 type PlayerCard = { id: string; content: string };
 type InfluencerCard = { villain: string; tactic: string[] };
 type tacticUsed = { tactic: string; player: Player };
+type shuffledDeck = { type: string; data: string[]; isShuffled: boolean };
 
 export default class Server implements Party.Server {
   constructor(readonly room: Party.Room) {}
@@ -30,6 +31,12 @@ export default class Server implements Party.Server {
   streakBonus = this.currentRound < 5 ? 1 : this.currentRound < 10 ? 2 : 3;
   correctAnswer = 2;
   wrongAnswer = -1;
+  shuffledDeck: shuffledDeck = {
+    type: "shuffledDeck",
+    data: [],
+    isShuffled: false,
+  };
+  deckReady: string[] = [];
 
   getPlayers() {
     return this.players;
@@ -319,7 +326,18 @@ export default class Server implements Party.Server {
           JSON.stringify({ type: "allReady", roomData: allReady })
         );
         break;
+      case "startingDeck":
+        if (!this.shuffledDeck.isShuffled && !this.deckReady.length) {
+          this.deckReady = shuffleInfluencerDeck(parsedContent.data);
+          this.shuffledDeck = {
+            type: "shuffledDeck",
+            data: this.deckReady,
+            isShuffled: true,
+          };
+        }
+        this.room.broadcast(JSON.stringify(this.shuffledDeck));
 
+        break;
       case "endOfRound":
         console.log("End of round reached", parsedContent);
         if (Array.isArray(parsedContent.players)) {
@@ -367,3 +385,12 @@ export const getPlayedCards = (room: Party.Room) => {
 export const getInfluencerCards = (room: Party.Room) => {
   return new Server(room).getInfluencerCards();
 };
+
+// Utility function to shuffle the influencer deck
+export function shuffleInfluencerDeck(array: string[]) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]]; // Swap elements
+  }
+  return array;
+}
