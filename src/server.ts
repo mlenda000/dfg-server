@@ -273,7 +273,8 @@ export default class Server implements Party.Server {
             JSON.stringify({
               type: "roomUpdate",
               room: updatedRoom.name,
-              roomData: updatedRoom,
+              count: updatedRoom.count,
+              roomData: updatedRoom.players,
             })
           );
           // If the room is empty, remove it from the list
