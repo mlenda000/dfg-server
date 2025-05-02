@@ -1,4 +1,5 @@
 import type * as Party from "partykit/server";
+import startingDeck from "./data/influencerCards.json";
 
 type Player = {
   id: string;
@@ -20,11 +21,12 @@ type Room = {
   players: Player[];
   deck?: shuffledDeck;
   round?: number;
+  type?: string; // Added type to Room for deck retrieval
 };
 type PlayerCard = { id: string; content: string };
 type InfluencerCard = { villain: string; tactic: string[] };
 type tacticUsed = { tactic: string; player: Player };
-type shuffledDeck = { type: string; data: string[]; isShuffled: boolean };
+type shuffledDeck = { type: string; data: object[]; isShuffled: boolean };
 
 export default class Server implements Party.Server {
   constructor(readonly room: Party.Room) {}
@@ -43,7 +45,7 @@ export default class Server implements Party.Server {
     data: [],
     isShuffled: false,
   };
-  deckReady: string[] = [];
+  deckReady: object[] = [];
 
   getPlayers() {
     return this.players;
@@ -108,7 +110,6 @@ export default class Server implements Party.Server {
           });
         }
 
-        console.log(anyCorrect, "anyCorrect");
         // sets the player was correct if any of the tactics were correct
         player.wasCorrect = anyCorrect;
       }
@@ -137,9 +138,6 @@ export default class Server implements Party.Server {
       }
 
       this.resetPlayerForNextRound(updatedPlayer);
-      console.log(
-        `Player ${updatedPlayer.name} score updated: ${updatedPlayer.score} streak: ${updatedPlayer.streak}`
-      );
 
       return updatedPlayer;
     });
@@ -202,7 +200,6 @@ export default class Server implements Party.Server {
 
     switch (parsedContent?.type) {
       case "enteredLobby":
-        // console.log(parsedContent, "entered lobby ---------------------");
         const roomCounts: Record<string, Room> = {};
 
         this.players.forEach((player) => {
@@ -222,7 +219,6 @@ export default class Server implements Party.Server {
           count: 0,
           players: [],
         };
-        // console.log("Room data:", roomData);
 
         this.room.broadcast(
           JSON.stringify({
@@ -252,10 +248,25 @@ export default class Server implements Party.Server {
           this.rooms.push(room);
         }
         room.players.push(parsedContent.player);
-        room.count++;
+        room.count = room.players.length;
 
         this.players.push(parsedContent.player);
+        console.log(room, "room after player enters");
 
+        if (!room.deck) {
+          console.log(
+            "No deck found, creating a new shuffled deck ---- in conditional"
+          );
+          this.deckReady = shuffleInfluencerDeck(startingDeck.influencerCards);
+          this.shuffledDeck = {
+            type: "shuffledDeck",
+            data: this.deckReady,
+            isShuffled: true,
+          };
+          console.log(this.shuffledDeck, "shuffledDeck after shuffle");
+          room.deck = this.shuffledDeck;
+        }
+        console.log(room.deck, "room.deck after player enters");
         // Broadcast updated room data to all players in the room
         this.room.broadcast(
           JSON.stringify({
@@ -263,18 +274,28 @@ export default class Server implements Party.Server {
             room: room.name,
             count: room.count,
             players: room.players,
+            deck: room.deck,
           })
         );
-        const currentDeck = this.rooms.find(
-          (room) => room.name === parsedContent.room
-        )?.deck;
-        if (currentDeck) {
-          console.log("Current deck found:", currentDeck);
-          sender.send(JSON.stringify(currentDeck));
-        } else {
-          console.error(`Deck not found for room: ${parsedContent.room}`);
-        }
-        // sender.send(JSON.stringify(this.shuffledDeck));
+        // console.log(this.rooms, "rooms after player enters");
+        // console.log(parsedContent, "parsedContent after player enters");
+        // const currentDeck = this.rooms.find(
+        //   (room) => room.name === parsedContent.room
+        // );
+        // console.log(currentDeck, "currentDeck after player enters");
+        // if (currentDeck) {
+        //   console.log("Current deck found: conditional entered", currentDeck);
+        //   currentDeck.deck = this.shuffledDeck;
+        //   currentDeck.type = "retrieveDeck";
+        //   sender.send(JSON.stringify(currentDeck));
+        //   currentDeck.type = undefined; // Reset type after sending
+        //   this.rooms = this.rooms.map((room) =>
+        //     room.name === currentDeck.name ? currentDeck : room
+        //   );
+        // } else {
+        //   console.error(`Deck not found for room: ${parsedContent.room}`);
+        // }
+
         break;
       case "playerLeft":
         //TODO: Handle player leaving the room
@@ -307,18 +328,13 @@ export default class Server implements Party.Server {
         break;
 
       case "influencer":
-        // console.log(parsedContent);
         this.influencerCard = parsedContent;
-        // console.log("Influencer card set:", this.influencerCard);
         this.room.broadcast(
           JSON.stringify({ type: "villain", villain: parsedContent.villain })
         );
         break;
       case "playerReady":
         this.players = this.players.map((player) => {
-          //   console.log(sender.id, "sender id");
-          //   console.log(player.id, "player id");
-          //   console.log(player.id === sender.id);
           if (player.id === sender.id) {
             player.status = true; // Set the sender's player status to true
           }
@@ -329,7 +345,6 @@ export default class Server implements Party.Server {
           updatedPlayer.status = player.status; // Ensure the status is preserved
           return updatedPlayer ? { ...player, ...updatedPlayer } : player;
         });
-        // console.log(this.players, "players after ready status update");
         this.room.broadcast(
           JSON.stringify({
             type: "playerReady",
@@ -346,7 +361,8 @@ export default class Server implements Party.Server {
         break;
       case "startingDeck":
         if (
-          (!this.shuffledDeck.isShuffled && this.deckReady.length === 0) ||
+          !this.shuffledDeck.isShuffled &&
+          this.deckReady.length === 0 &&
           !this.deckReady
         ) {
           this.deckReady = shuffleInfluencerDeck(parsedContent.data);
@@ -373,10 +389,8 @@ export default class Server implements Party.Server {
 
         break;
       case "endOfRound":
-        // console.log("End of round reached", parsedContent);
         if (Array.isArray(parsedContent.players)) {
           this.calculateScore(parsedContent.players);
-          //   console.log(this.players, "players after score calculation");
 
           if (this.areAllScoresUpdated(this.players)) {
             this.room.broadcast(
@@ -445,7 +459,7 @@ export const getInfluencerCards = (room: Party.Room) => {
 };
 
 // Utility function to shuffle the influencer deck
-export function shuffleInfluencerDeck(array: string[]) {
+export function shuffleInfluencerDeck(array: object[]) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]]; // Swap elements
