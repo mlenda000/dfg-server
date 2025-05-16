@@ -326,7 +326,6 @@ export default class Server implements Party.Server {
         );
         break;
       case "playerNotReady":
-        console.log("playerNotReady", parsedContent);
         this.players = this.players.map((player) => {
           if (player.id === sender.id) {
             player.status = false; // Set the sender's player status to false
@@ -338,7 +337,6 @@ export default class Server implements Party.Server {
           updatedPlayer.status = player.status; // Ensure the status is preserved
           return updatedPlayer ? { ...player, ...updatedPlayer } : player;
         });
-        console.log(this.players, "this.players in playerReady");
         this.room.broadcast(
           JSON.stringify({
             type: "playerReady",
