@@ -298,38 +298,6 @@ export default class Server implements Party.Server {
         );
 
         break;
-      //   case "playerLeft":
-      //TODO: Handle player leaving the room
-      // this.players = this.players.filter((player) => player.id !== sender.id);
-      // this.room.broadcast(
-      //   JSON.stringify({ type: "playerLeft", playerId: sender.id })
-      // );
-      // Update room data after player leaves
-      // console.log("am I here-----------------------------------------------");
-      // // console.log(this.players);
-      // const updatedRoom = this.rooms.find(
-      //   (r) => r.name === parsedContent.room
-      // );
-      // if (updatedRoom) {
-      //   updatedRoom.players = updatedRoom.players.filter(
-      //     (player) => player.id !== sender.id
-      //   );
-      //   console.log(updatedRoom, "updatedRoom after player leaves");
-      //   updatedRoom.count = updatedRoom.players.length;
-      //   this.room.broadcast(
-      //     JSON.stringify({
-      //       type: "roomUpdate-PlayerLeft",
-      //       room: updatedRoom.name,
-      //       count: updatedRoom.count,
-      //       roomData: updatedRoom.players,
-      //     })
-      //   );
-      //   // If the room is empty, remove it from the list
-      //   if (updatedRoom.count === 0) {
-      //     this.rooms = this.rooms.filter((r) => r.name !== updatedRoom.name);
-      //   }
-      // }
-      // break;
 
       case "influencer":
         this.influencerCard = parsedContent;
@@ -349,6 +317,28 @@ export default class Server implements Party.Server {
           updatedPlayer.status = player.status; // Ensure the status is preserved
           return updatedPlayer ? { ...player, ...updatedPlayer } : player;
         });
+        this.room.broadcast(
+          JSON.stringify({
+            type: "playerReady",
+            roomData: this.players,
+            sender: sender.id,
+          })
+        );
+        break;
+      case "playerNotReady":
+        console.log("playerNotReady", parsedContent);
+        this.players = this.players.map((player) => {
+          if (player.id === sender.id) {
+            player.status = false; // Set the sender's player status to false
+          }
+
+          const updatedPlayer = parsedContent.players.find(
+            (p: Player) => p.id === player.id
+          );
+          updatedPlayer.status = player.status; // Ensure the status is preserved
+          return updatedPlayer ? { ...player, ...updatedPlayer } : player;
+        });
+        console.log(this.players, "this.players in playerReady");
         this.room.broadcast(
           JSON.stringify({
             type: "playerReady",
