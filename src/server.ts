@@ -16,6 +16,8 @@ import {
 } from "./components/Scoring/scoring";
 import { parseContent } from "./utils/utils";
 
+console.log("🚀 PartyKit Server deployed and ready! Updated Version 2.0");
+
 export default class Server implements Party.Server {
   constructor(readonly room: Party.Room) {}
 
