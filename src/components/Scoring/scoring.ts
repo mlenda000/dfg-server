@@ -37,6 +37,13 @@ export function calculateScore(
           (tactic) => !influencerCard.tactic.includes(tactic)
         ) || [];
 
+      console.log(`🎯 [calculateScore] Player ${clientPlayer.id}:`, {
+        tacticUsed: clientPlayer.tacticUsed,
+        influencerTactics: influencerCard.tactic,
+        correctTactics,
+        wrongTactics,
+      });
+
       // Process correct tactics
       if (correctTactics.length > 0) {
         correctTactics.forEach(() => {
@@ -51,6 +58,10 @@ export function calculateScore(
           score += WRONG_ANSWER * 50;
         });
       }
+
+      console.log(
+        `📊 [calculateScore] Round score for ${clientPlayer.id}: ${score}`
+      );
     }
 
     // Add the players current score to the new points for this round
@@ -166,6 +177,8 @@ export function resetPlayerForNextRound(player: Player) {
   player.tacticUsed = [];
   player.status = false;
   player.scoreUpdated = false;
+  player.streak = 0; // Reset streak for next round
+  player.hasStreak = false; // Reset hasStreak flag
 }
 
 export function areAllScoresUpdated(players: Player[]): boolean {
