@@ -43,6 +43,7 @@ export default class Server implements Party.Server {
   deckReady: object[] = [];
   wasScored: WasScored = false;
   scoredRounds: Map<string, Set<number>> = new Map(); // Track which rounds have been scored per room
+  roomRounds: Map<string, number> = new Map(); // Track last scored round per room
 
   getPlayers() {
     return this.players;
@@ -443,7 +444,12 @@ export default class Server implements Party.Server {
           if (roundRoom && Array.isArray(playersToScore)) {
             // Prevent duplicate scoring for the same round
             const roomKey = roundRoom.name;
-            const roundNumber = parsedContent.round || this.currentRound;
+            // Derive round number robustly: use provided round, else last+1, else 1
+            const lastRound = this.roomRounds.get(roomKey) ?? 0;
+            const roundNumber =
+              typeof parsedContent.round === "number" && parsedContent.round > 0
+                ? parsedContent.round
+                : lastRound + 1 || 1;
 
             if (!this.scoredRounds.has(roomKey)) {
               this.scoredRounds.set(roomKey, new Set());
@@ -487,6 +493,9 @@ export default class Server implements Party.Server {
                   players: roundRoom.players,
                 })
               );
+
+              // Update last scored round for this room
+              this.roomRounds.set(roomKey, roundNumber);
 
               // Prepare players for the next round without touching score/streak
               // Clear tactics and readiness so next round scoring only considers fresh choices
