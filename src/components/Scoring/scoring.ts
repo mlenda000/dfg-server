@@ -65,11 +65,18 @@ export function calculateScore(
     }
 
     // Add the players current score to the new points for this round
+    console.log(
+      `💰 [calculateScore] Before: currentScore=${currentScore}, roundScore=${score}, prevStreak=${prevStreak}`
+    );
     let updatedScore = currentScore + score;
     updatedScore = Math.max(updatedScore, 0); // Ensure score doesn't go below 0
 
     // Update streak: increment if player got any correct answers, reset if all wrong
     const streak = anyCorrect ? prevStreak + 1 : 0;
+
+    console.log(
+      `💰 [calculateScore] After: updatedScore=${updatedScore}, streak=${streak}, anyCorrect=${anyCorrect}`
+    );
 
     const updatedPlayer: Player = {
       ...existingPlayer,

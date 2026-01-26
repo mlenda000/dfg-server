@@ -477,10 +477,8 @@ export default class Server implements Party.Server {
                 return updated ? { ...p, ...updated } : p;
               });
 
-              roundRoom.players.forEach((player) => {
-                resetPlayerForNextRound(player);
-                this.wasScored = false; // Reset wasScored for the next round
-              });
+              // Don't reset player state here - it will be reset when the next round starts
+              // This prevents duplicate endOfRound messages from re-scoring
 
               this.room.broadcast(
                 JSON.stringify({
@@ -489,6 +487,17 @@ export default class Server implements Party.Server {
                   players: roundRoom.players,
                 })
               );
+
+              // Prepare players for the next round without touching score/streak
+              // Clear tactics and readiness so next round scoring only considers fresh choices
+              roundRoom.players = roundRoom.players.map((p) => ({
+                ...p,
+                tacticUsed: [],
+                isReady: false,
+                scoreUpdated: false,
+                streakUpdated: false,
+                // keep: score, streak, hasStreak, wasCorrect (UI reads from snapshot on client)
+              }));
             } else {
               console.error(
                 "Not all players have their scores updated for room",
