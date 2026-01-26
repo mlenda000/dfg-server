@@ -443,26 +443,28 @@ export default class Server implements Party.Server {
           if (roundRoom && Array.isArray(playersToScore)) {
             // Prevent duplicate scoring for the same round
             const roomKey = roundRoom.name;
+            const roundNumber = parsedContent.round || this.currentRound;
+
             if (!this.scoredRounds.has(roomKey)) {
               this.scoredRounds.set(roomKey, new Set());
             }
             const scoredRoundsForRoom = this.scoredRounds.get(roomKey)!;
 
-            if (scoredRoundsForRoom.has(this.currentRound)) {
+            if (scoredRoundsForRoom.has(roundNumber)) {
               console.log(
-                `⚠️ [endOfRound] Round ${this.currentRound} already scored for room ${roomKey}, ignoring duplicate`
+                `⚠️ [endOfRound] Round ${roundNumber} already scored for room ${roomKey}, ignoring duplicate`
               );
               break;
             }
 
             // Mark this round as scored
-            scoredRoundsForRoom.add(this.currentRound);
+            scoredRoundsForRoom.add(roundNumber);
 
             const updatedPlayers = calculateScore(
               playersToScore,
               roundRoom.players,
               this.influencerCard,
-              this.currentRound
+              roundNumber
             );
 
             // Update the room's players with the calculated scores
