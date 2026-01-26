@@ -132,6 +132,10 @@ export default class Server implements Party.Server {
           );
           break;
         case "playerEnters":
+          console.log("🎮 [playerEnters] Received:", {
+            player: parsedContent.player,
+            room: parsedContent.room,
+          });
           try {
             this.room.broadcast(
               JSON.stringify({
@@ -184,19 +188,26 @@ export default class Server implements Party.Server {
 
             // Broadcast updated room data to all players in the room
             // Include current round and card index so all players sync to same card
-            this.room.broadcast(
-              JSON.stringify({
-                type: "roomUpdate",
-                room: room.name,
-                count: room.count,
-                players: room.players,
-                deck: room.deck,
-                currentRound: this.currentRound,
-                cardIndex: this.currentRound - 1, // card index corresponds to round
-                newsCard: this.currentNewsCard,
-                themeStyle: this.currentTheme,
-              })
-            );
+            const roomUpdateMessage = {
+              type: "roomUpdate",
+              room: room.name,
+              count: room.count,
+              players: room.players,
+              deck: room.deck,
+              currentRound: this.currentRound,
+              cardIndex: this.currentRound - 1, // card index corresponds to round
+              newsCard: this.currentNewsCard,
+              themeStyle: this.currentTheme,
+            };
+
+            console.log("📤 [playerEnters] Broadcasting roomUpdate:", {
+              type: roomUpdateMessage.type,
+              room: roomUpdateMessage.room,
+              playersCount: roomUpdateMessage.players.length,
+              hasDeck: !!roomUpdateMessage.deck,
+            });
+
+            this.room.broadcast(JSON.stringify(roomUpdateMessage));
 
             console.log(
               `Player ${parsedContent.player.name} (${sender.id}) entered room ${parsedContent.room}`
