@@ -42,6 +42,7 @@ export default class Server implements Party.Server {
   };
   deckReady: object[] = [];
   wasScored: WasScored = false;
+  scoredRounds: Map<string, Set<number>> = new Map(); // Track which rounds have been scored per room
 
   getPlayers() {
     return this.players;
@@ -440,6 +441,23 @@ export default class Server implements Party.Server {
             : roundRoom?.players;
 
           if (roundRoom && Array.isArray(playersToScore)) {
+            // Prevent duplicate scoring for the same round
+            const roomKey = roundRoom.name;
+            if (!this.scoredRounds.has(roomKey)) {
+              this.scoredRounds.set(roomKey, new Set());
+            }
+            const scoredRoundsForRoom = this.scoredRounds.get(roomKey)!;
+
+            if (scoredRoundsForRoom.has(this.currentRound)) {
+              console.log(
+                `⚠️ [endOfRound] Round ${this.currentRound} already scored for room ${roomKey}, ignoring duplicate`
+              );
+              break;
+            }
+
+            // Mark this round as scored
+            scoredRoundsForRoom.add(this.currentRound);
+
             const updatedPlayers = calculateScore(
               playersToScore,
               roundRoom.players,
