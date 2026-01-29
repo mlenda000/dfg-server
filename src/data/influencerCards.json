@@ -8,7 +8,7 @@
       "harm": [
         "Celebs mix jokes with fear to make you think normal music is dangerous, causing unnecessary worry. "
       ],
-      "newsImage": "biost_water-fountain.webp",
+      "newsImage": "celeb_songs.webp",
       "tacticUsed": ["tricky-jokes", "fear-mongering"],
       "takeaway": "Just because lots of people online say something doesn't make it true—check with trusted adults.",
       "villain": "The_Celeb"
@@ -19,7 +19,7 @@
       "bodyCopy": "Amanda Teague from the UK married a 300-year-old pirate ghost in 2018, then divorced him because he was too controlling and draining her energy!",
       "collection": "misinformation_cards",
       "harm": "Bots spread bizarre true stories to get clicks, making it harder to distinguish important news from entertainment.",
-      "newsImage": "celeb_ghost.webp",
+      "newsImage": "bots_married.webp",
       "tacticUsed": ["true"],
       "takeaway": "This one’s real, but ask if stories are newsworthy or just clickbait designed to grab your attention for engagement.",
       "villain": "The_Bots"
@@ -32,7 +32,7 @@
       "harm": [
         "Bots create clickbait headlines with wild claims just to get clicks and make money from ads."
       ],
-      "newsImage": "bot_alien-message.webp",
+      "newsImage": "bots_nasa.webp",
       "tacticUsed": ["clickbait"],
       "takeaway": "If there's no real proof, no official NASA statement, and the site looks sketchy—it's probably clickbait. ",
       "villain": "The_Bots"
@@ -45,7 +45,7 @@
       "harm": [
         "Biosts twist real science to scare you about safe products, then sell expensive \"natural\" alternatives."
       ],
-      "newsImage": "biost_toothbrush.webp",
+      "newsImage": "biost_toothpaste.webp",
       "tacticUsed": ["fear-mongering"],
       "takeaway": "When posts create fear about everyday products to sell solutions, ask real doctors before believing or buying.",
       "villain": "The_Biost"
@@ -58,7 +58,7 @@
       "harm": [
         "Celebs create fake accounts pretending to be stars, tricking kids into scams and stealing personal info."
       ],
-      "newsImage": "bot_1000giveaway.webp",
+      "newsImage": "celeb_mrbeast.webp",
       "tacticUsed": ["impersonation"],
       "takeaway": "Check the username carefully, look for verification badges, and never DM personal payment info to anyone.",
       "villain": "The_Celeb"
@@ -71,7 +71,7 @@
       "harm": [
         "Oligs make you doubt friends who care about you so companies can profit from your personal data."
       ],
-      "newsImage": "olig_school-lunch.webp",
+      "newsImage": "olig_paranoid.webp",
       "tacticUsed": ["gaslighting"],
       "takeaway": "If posts dismiss privacy concerns as \"dramatic,\" ask yourself why someone might want your personal information.",
       "villain": "The_Olig"
@@ -84,10 +84,10 @@
       "harm": [
         "Oligs makes up fake phone bullying stories to guilt your parents into buying expensive tech for company profits."
       ],
-      "tacticUsed": ["tricky-jokes"],
+      "tacticUsed": ["emotional-manipulation"],
       "takeaway": "When posts create panic about social problems that conveniently require expensive purchases, question who benefits from the fear.",
       "villain": "The_Olig",
-      "newsImage": "bot_flies.webp"
+      "newsImage": "olig_outdated.webp"
     },
     {
       "id": "KBjGXacaBQkeAlXV1fX5",
@@ -111,7 +111,7 @@
       "tacticUsed": ["emotional-manipulation"],
       "takeaway": "If the story feels vague, has no real news coverage, or uses guilt—pause and fact-check first.",
       "villain": "The_Olig",
-      "newsImage": "celeb_sad.webp"
+      "newsImage": "olig_sad.webp"
     },
     {
       "id": "RBGAonFcujPSM7erl5vH",
@@ -120,8 +120,8 @@
       "bodyCopy": "Pro player RepulseGod was caught letting someone else play his account in tournaments. Epic Games disqualified him, took his prize money, and banned him permanently.",
       "tacticUsed": ["true"],
       "tacticUsedImage": "",
-      "villain": "The_Bots",
-      "newsImage": "bot_fortnite.webp",
+      "villain": "The_Celeb",
+      "newsImage": "celeb_fortnite.webp",
       "harm": "Celebs blast true stories like this everywhere, turning real drama into viral outrage—making it hard to tell if you're learning something or just being pushed to react.",
       "takeaway": "This one’s true—but ask who's sharing it and why before getting swept up in the gaming celebrity drama."
     },
@@ -136,7 +136,7 @@
       "tacticUsed": ["impersonation"],
       "takeaway": "The takeaway: If no real experts support it and the person doesn't exist on official sites—it's fake.",
       "villain": "The_Biost",
-      "newsImage": "olig_top-scientist.webp"
+      "newsImage": "biost_scientist.webp"
     },
     {
       "id": "amWonHKnJkxbHAzO9Jqu",
@@ -144,7 +144,7 @@
       "caption": "The Fancy Tap Water Scam!",
       "bodyCopy": "Coca-Cola sold Dasani as premium water but it was just tap water! When dangerous chemicals were found, they had to pull every bottle from shelves immediately.",
       "tacticUsed": ["true"],
-      "newsImage": "olig_coca-cola.webp",
+      "newsImage": "olig_water.webp",
       "villain": "The_Olig",
       "harm": "This shows how Olig companies use fancy branding to sell ordinary products at premium prices for profit.",
       "takeaway": "Yep this really happened—it shows how companies use fancy marketing to fool people. Don't trust labels, check the facts!"
@@ -155,7 +155,7 @@
       "caption": "SHOCKING: Parents who limit phone time are damaging their kids' futures! 📱💔",
       "bodyCopy": "Studies show kids with phone limits score lower on technology skills tests! While other kids learn coding and digital creativity, YOUR parents are holding you back from essential 21st-century skills!",
       "tacticUsed": ["cherry-picking", "emotional-manipulation"],
-      "newsImage": "celeb_adyson.webp",
+      "newsImage": "olig_limits.webp",
       "villain": "The_Celeb",
       "harm": [
         "Olig cherry-picks weak studies and makes you distrust parents who set healthy boundaries for your wellbeing."
@@ -168,7 +168,7 @@
       "caption": "These 'natural' influencers are SO embarrassing without filters! 😂📸",
       "bodyCopy": "Check out these hilarious before/after photos of influencers without makeup or filters! They look like totally different people! No wonder they need so much editing to look human!",
       "tacticUsed": ["tricky-jokes"],
-      "newsImage": "celeb_mr-beast.webp",
+      "newsImage": "celeb_natural.webp",
       "villain": "The_Celeb",
       "harm": [
         "Celebs use cruel humour about appearance to normalize bullying and make you feel bad about natural looks."
@@ -181,7 +181,7 @@
       "caption": "⚠️ Using headphones while studying can hurt your brain in just one week!",
       "bodyCopy": "New studies show headphones cause serious brain damage in just seven days! That's why smart students are switching to the \"BrainBoost Headband\" to stay safe and focus better!",
       "tacticUsed": ["fear-mongering"],
-      "newsImage": "biost_cancer-cure.webp",
+      "newsImage": "biost_headphones.webp",
       "villain": "The_Biost",
       "harm": [
         "Biosts create fake health scares about normal activities just to sell you expensive products you don't need."
@@ -194,7 +194,7 @@
       "caption": "MrBeast's SECRET CONNECTION to the Illuminati EXPOSED! 👀🕶️",
       "bodyCopy": "Strange symbols in MrBeast's videos prove he's part of the Illuminati! His massive success and endless money isn't luck—it's a secret deal! Are we being brainwashed without knowing?",
       "tacticUsed": ["conspiracy-theory", "fear-mongering"],
-      "newsImage": "olig_video-game.webp",
+      "newsImage": "biost_illuminati.webp",
       "villain": "The_Biost",
       "harm": [
         "Biosts spread wild conspiracy theories with zero evidence to create fear and confusion about popular figures."
@@ -209,10 +209,10 @@
       "harm": [
         "Fans feel betrayed by their favorite idol while Billie gets blamed for something completely fake."
       ],
-      "newsImage": "celeb_bilie.webp",
+      "newsImage": "bots_billie-eilish.webp",
       "tacticUsed": ["deepfakes"],
       "takeaway": "If the video looks sus with weird glitches and real news isn't covering it, it's probably fake.",
-      "villain": "The_Celeb"
+      "villain": "The_Bots"
     },
     {
       "id": "r93QoGB6y4cA80HV9wPH",
@@ -222,9 +222,9 @@
       "harm": [
         "Bots create fake accounts with glowing reviews to trick you into buying products that don't work."
       ],
-      "tacticUsed": ["gaslighting"],
+      "tacticUsed": ["sock-puppetry"],
       "takeaway": "If you see tons of similar comments or only positive reviews—ask trusted adults before buying.",
-      "newsImage": "olig_frosty.webp",
+      "newsImage": "bots_vitamin.webp",
       "villain": "The_Bots"
     },
     {
@@ -234,7 +234,7 @@
       "harm": [
         "Celebs create fake urgency about losing access to stars, scaring you into joining sketchy apps or paying money."
       ],
-      "newsImage": "biost_vape.webp",
+      "newsImage": "celeb_influencers.webp",
       "tacticUsed": ["fear-mongering"],
       "takeaway": "When posts scare you about missing celebrities forever—pause and check if the threat is actually real first.",
       "villain": "The_Celeb"
@@ -247,7 +247,7 @@
       "harm": [
         "Bots combine fake videos and clickbait headlines to create viral scandals that ruin reputations for profit."
       ],
-      "newsImage": "bot_logan-paul.webp",
+      "newsImage": "bots_logan-paul.webp",
       "tacticUsed": ["deepfakes", "clickbait"],
       "takeaway": "If the video looks off and no real news covers it—don't share the drama! ",
       "villain": "The_Bots"
