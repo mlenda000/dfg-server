@@ -69,13 +69,13 @@ export default class Server implements Party.Server {
           JSON.stringify({
             type: "announcement",
             text: `Room is full. Only 5 players are allowed.`,
-          })
+          }),
         );
         conn.close();
         return; // Exit early to prevent further processing
       } else {
         conn.send(
-          JSON.stringify({ type: "announcement", text: `Welcome, ${conn.id}` })
+          JSON.stringify({ type: "announcement", text: `Welcome, ${conn.id}` }),
         );
         conn.send(JSON.stringify({ type: "id", id: `id+${conn.id}` }));
         this.room.broadcast(
@@ -84,7 +84,7 @@ export default class Server implements Party.Server {
             room: this.room,
             roomCount: this.players.length,
           }),
-          [conn.id]
+          [conn.id],
         );
       }
     }
@@ -92,7 +92,7 @@ export default class Server implements Party.Server {
       JSON.stringify({
         type: "announcement",
         text: `Heads up! ${conn.id} joined the party!`,
-      })
+      }),
     );
   }
 
@@ -130,7 +130,7 @@ export default class Server implements Party.Server {
               room: parsedContent.room,
               count: roomData.count,
               roomData,
-            })
+            }),
           );
           break;
         case "playerEnters":
@@ -146,7 +146,7 @@ export default class Server implements Party.Server {
                   parsedContent.player?.name || "Unknown"
                 }`,
               }),
-              [sender.id]
+              [sender.id],
             );
             sender.send(JSON.stringify({ type: "playerId", id: sender.id }));
 
@@ -157,7 +157,7 @@ export default class Server implements Party.Server {
                 JSON.stringify({
                   type: "error",
                   message: "Missing player object in playerEnters message",
-                })
+                }),
               );
               break;
             }
@@ -178,7 +178,7 @@ export default class Server implements Party.Server {
 
             if (!room.deck) {
               this.deckReady = shuffleInfluencerDeck(
-                startingDeck.influencerCards
+                startingDeck.influencerCards,
               );
               this.shuffledDeck = {
                 type: "shuffledDeck",
@@ -212,7 +212,7 @@ export default class Server implements Party.Server {
             this.room.broadcast(JSON.stringify(roomUpdateMessage));
 
             console.log(
-              `Player ${parsedContent.player.name} (${sender.id}) entered room ${parsedContent.room}`
+              `Player ${parsedContent.player.name} (${sender.id}) entered room ${parsedContent.room}`,
             );
           } catch (error) {
             console.error("Error handling playerEnters:", error);
@@ -220,7 +220,7 @@ export default class Server implements Party.Server {
               JSON.stringify({
                 type: "error",
                 message: "Server error processing playerEnters",
-              })
+              }),
             );
           }
 
@@ -241,13 +241,13 @@ export default class Server implements Party.Server {
             this.currentTheme = parsedContent.villain;
           }
           this.room.broadcast(
-            JSON.stringify({ type: "villain", villain: parsedContent.villain })
+            JSON.stringify({ type: "villain", villain: parsedContent.villain }),
           );
           break;
         case "playerReady":
           // Find the specific room this player is in
           const readyRoom = this.rooms.find(
-            (r) => r.name === parsedContent.room
+            (r) => r.name === parsedContent.room,
           );
           if (readyRoom) {
             // Update players in that specific room
@@ -256,7 +256,7 @@ export default class Server implements Party.Server {
                 player.isReady = true;
               }
               const updatedPlayer = parsedContent.players.find(
-                (p: Player) => p.id === player.id
+                (p: Player) => p.id === player.id,
               );
               if (updatedPlayer) {
                 return {
@@ -277,7 +277,7 @@ export default class Server implements Party.Server {
                 player.isReady = true;
               }
               const updatedPlayer = parsedContent.players.find(
-                (p: Player) => p.id === player.id
+                (p: Player) => p.id === player.id,
               );
               if (updatedPlayer) {
                 return {
@@ -299,14 +299,14 @@ export default class Server implements Party.Server {
                 room: parsedContent.room,
                 roomData: readyRoom.players,
                 sender: sender.id,
-              })
+              }),
             );
           }
           break;
         case "playerNotReady":
           // Find the specific room this player is in
           const notReadyRoom = this.rooms.find(
-            (r) => r.name === parsedContent.room
+            (r) => r.name === parsedContent.room,
           );
           if (notReadyRoom) {
             // Update players in that specific room
@@ -315,7 +315,7 @@ export default class Server implements Party.Server {
                 player.isReady = false;
               }
               const updatedPlayer = parsedContent.players.find(
-                (p: Player) => p.id === player.id
+                (p: Player) => p.id === player.id,
               );
               if (updatedPlayer) {
                 return {
@@ -336,7 +336,7 @@ export default class Server implements Party.Server {
                 player.isReady = false;
               }
               const updatedPlayer = parsedContent.players.find(
-                (p: Player) => p.id === player.id
+                (p: Player) => p.id === player.id,
               );
               if (updatedPlayer) {
                 return {
@@ -358,14 +358,14 @@ export default class Server implements Party.Server {
                 room: parsedContent.room,
                 roomData: notReadyRoom.players,
                 sender: sender.id,
-              })
+              }),
             );
           }
           break;
         case "allReady":
           const allReady = this.players.every((player) => player.isReady);
           this.room.broadcast(
-            JSON.stringify({ type: "allReady", roomData: allReady })
+            JSON.stringify({ type: "allReady", roomData: allReady }),
           );
           break;
         case "startingDeck":
@@ -383,12 +383,12 @@ export default class Server implements Party.Server {
           }
 
           let currentRoom = this.rooms.find(
-            (r) => r.name === parsedContent.room
+            (r) => r.name === parsedContent.room,
           );
           if (currentRoom && !currentRoom.deck) {
             currentRoom.deck = this.shuffledDeck;
             this.rooms = this.rooms.map((room) =>
-              room.name === currentRoom.name ? currentRoom : room
+              room.name === currentRoom.name ? currentRoom : room,
             );
           } else {
             console.error(`Room ${parsedContent.room} not found.`);
@@ -400,11 +400,11 @@ export default class Server implements Party.Server {
         case "playerLeaves": {
           // Remove player from the specified room
           const leaveRoom = this.rooms.find(
-            (r) => r.name === parsedContent.room
+            (r) => r.name === parsedContent.room,
           );
           if (leaveRoom) {
             leaveRoom.players = leaveRoom.players.filter(
-              (p) => p.id !== sender.id
+              (p) => p.id !== sender.id,
             );
             leaveRoom.count = leaveRoom.players.length;
 
@@ -422,7 +422,7 @@ export default class Server implements Party.Server {
                 cardIndex: this.currentRound - 1,
                 newsCard: this.currentNewsCard,
                 themeStyle: this.currentTheme,
-              })
+              }),
             );
 
             // Remove empty room
@@ -435,7 +435,7 @@ export default class Server implements Party.Server {
         case "endOfRound":
           // Identify the room this round belongs to so we only score that room
           const roundRoom = this.rooms.find(
-            (r) => r.name === parsedContent.room
+            (r) => r.name === parsedContent.room,
           );
           const playersToScore = Array.isArray(parsedContent.players)
             ? parsedContent.players
@@ -458,7 +458,7 @@ export default class Server implements Party.Server {
 
             if (scoredRoundsForRoom.has(roundNumber)) {
               console.log(
-                `⚠️ [endOfRound] Round ${roundNumber} already scored for room ${roomKey}, ignoring duplicate`
+                `⚠️ [endOfRound] Round ${roundNumber} already scored for room ${roomKey}, ignoring duplicate`,
               );
               break;
             }
@@ -470,7 +470,7 @@ export default class Server implements Party.Server {
               playersToScore,
               roundRoom.players,
               this.influencerCard,
-              roundNumber
+              roundNumber,
             );
 
             // Update the room's players with the calculated scores
@@ -491,7 +491,7 @@ export default class Server implements Party.Server {
                   type: "scoreUpdate",
                   room: roundRoom.name,
                   players: roundRoom.players,
-                })
+                }),
               );
 
               // Update last scored round for this room
@@ -510,19 +510,19 @@ export default class Server implements Party.Server {
             } else {
               console.error(
                 "Not all players have their scores updated for room",
-                roundRoom.name
+                roundRoom.name,
               );
             }
           } else {
             console.error(
-              "Invalid players data in parsedContent or room not found"
+              "Invalid players data in parsedContent or room not found",
             );
           }
           break;
         default:
           console.log(
             parsedContent,
-            "this is what my parsedContent is getting "
+            "this is what my parsedContent is getting ",
           );
           console.log(`Unknown message type: ${parsedContent?.type}`);
           break;
@@ -533,7 +533,7 @@ export default class Server implements Party.Server {
         JSON.stringify({
           type: "error",
           message: "Server error processing message",
-        })
+        }),
       );
     }
   }
@@ -543,16 +543,16 @@ export default class Server implements Party.Server {
       JSON.stringify({
         type: "announcement",
         text: `So sad! ${connection.id} left the party!`,
-      })
+      }),
     );
 
     const room = this.rooms.find((r) =>
-      r.players.some((player) => player.id === connection.id)
+      r.players.some((player) => player.id === connection.id),
     );
 
     if (room) {
       room.players = room.players.filter(
-        (player) => player.id !== connection.id
+        (player) => player.id !== connection.id,
       );
       room.count = room.players.length;
 
@@ -567,12 +567,32 @@ export default class Server implements Party.Server {
           cardIndex: this.currentRound - 1,
           newsCard: this.currentNewsCard,
           themeStyle: this.currentTheme,
-        })
+        }),
       );
 
-      // If the room is empty, remove it from the list
+      // If the room is empty, reset it to initial state
       if (room.count === 0) {
-        this.rooms = this.rooms.filter((r) => r.name !== room.name);
+        console.log(
+          `🔄 Room ${room.name} is now empty. Resetting room state...`,
+        );
+
+        // Reset the room to initial state for next game
+        room.deck = undefined;
+        room.round = undefined;
+
+        // Reset room-specific tracking data
+        this.scoredRounds.delete(room.name);
+        this.roomRounds.delete(room.name);
+
+        // Reset current round for this room (will be set fresh when new players join)
+        this.currentRound = 1;
+        this.currentNewsCard = null;
+        this.currentTheme = "all";
+        this.influencerCard = { villain: "biost", tactic: [] };
+
+        console.log(
+          `✅ Room ${room.name} has been reset and is ready for new players`,
+        );
       }
     }
 
