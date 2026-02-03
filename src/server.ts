@@ -470,69 +470,6 @@ export default class Server implements Party.Server {
           this.room.broadcast(JSON.stringify(this.shuffledDeck));
 
           break;
-        case "playerLeaves": {
-          // Get the player ID from connection mapping
-          const leavePlayerId =
-            this.connectionToPlayerId.get(sender.id) || sender.id;
-
-          // Remove player from the specified room using mapped player ID
-          const leaveRoom = this.rooms.find(
-            (r) => r.name === parsedContent.room,
-          );
-
-          if (leaveRoom) {
-            leaveRoom.players = leaveRoom.players.filter(
-              (p) => p.id !== leavePlayerId,
-            );
-            leaveRoom.count = leaveRoom.players.length;
-
-            // Update global players list
-            this.players = this.players.filter((p) => p.id !== leavePlayerId);
-
-            // Clean up connection mapping
-            this.connectionToPlayerId.delete(sender.id);
-
-            this.room.broadcast(
-              JSON.stringify({
-                type: "roomUpdate",
-                room: leaveRoom.name,
-                count: leaveRoom.count,
-                players: leaveRoom.players,
-                deck: leaveRoom.deck,
-                currentRound: this.currentRound,
-                cardIndex: this.currentRound - 1,
-                newsCard: this.currentNewsCard,
-                themeStyle: this.currentTheme,
-              }),
-            );
-
-            // Remove empty room and reset all game state
-            if (leaveRoom.count === 0) {
-              // Remove room from list
-              this.rooms = this.rooms.filter((r) => r.name !== leaveRoom.name);
-
-              // Reset room-specific tracking data
-              this.scoredRounds.delete(leaveRoom.name);
-              this.roomRounds.delete(leaveRoom.name);
-
-              // Reset all game state for fresh start
-              this.currentRound = 1;
-              this.currentNewsCard = null;
-              this.currentTheme = "all";
-              this.influencerCard = { villain: "biost", tactic: [] };
-              this.shuffledDeck = {
-                type: "shuffledDeck",
-                data: [],
-                isShuffled: false,
-              };
-              this.deckReady = [];
-              this.playedCards = [];
-              this.tacticsUsed = [];
-              this.wasScored = false;
-            }
-          }
-          break;
-        }
         case "endOfRound":
           // Identify the room this round belongs to so we only score that room
           const roundRoom = this.rooms.find(
