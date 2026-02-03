@@ -19,12 +19,11 @@ import { parseContent } from "./utils/utils";
 export default class Server implements Party.Server {
   constructor(readonly room: Party.Room) {
     // Log on first instance creation (per room)
-    console.log("🚀 PartyKit Server ready for room:", room.id);
   }
 
   // Counter for generating unique player IDs (static-like behavior per server instance)
   static playerIdCounter = 0;
-  
+
   // Generate a unique player ID
   generatePlayerId(): string {
     Server.playerIdCounter++;
@@ -70,8 +69,6 @@ export default class Server implements Party.Server {
 
   //update this to put everyone in a lobbyRoom
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
-    console.log("Client connected to room:", this.room.id);
-
     if (this.room.id === "lobby") {
       // Lobby-specific logic here
     } else {
@@ -114,7 +111,6 @@ export default class Server implements Party.Server {
         case "getPlayerId":
           // Generate a unique player ID for this client
           const newPlayerId = this.generatePlayerId();
-          console.log("🆔 [getPlayerId] Generated new player ID:", newPlayerId, "for connection:", sender.id);
           // Store mapping
           this.connectionToPlayerId.set(sender.id, newPlayerId);
           sender.send(JSON.stringify({ type: "playerId", id: newPlayerId }));
@@ -150,10 +146,6 @@ export default class Server implements Party.Server {
           );
           break;
         case "playerEnters":
-          console.log("🎮 [playerEnters] Received:", {
-            player: parsedContent.player,
-            room: parsedContent.room,
-          });
           try {
             this.room.broadcast(
               JSON.stringify({
@@ -180,16 +172,7 @@ export default class Server implements Party.Server {
 
             // Find or create the room first
             let room = this.rooms.find((r) => r.name === parsedContent.room);
-            console.log("🎮 [playerEnters] Looking for room:", {
-              roomName: parsedContent.room,
-              foundRoom: !!room,
-              currentRooms: this.rooms.map((r) => r.name),
-              currentRound: this.currentRound,
-              shuffledDeckLength: this.shuffledDeck?.data?.length || 0,
-              isShuffled: this.shuffledDeck?.isShuffled,
-            });
             if (!room) {
-              console.log("🎮 [playerEnters] Creating new room:", parsedContent.room);
               room = { name: parsedContent.room, count: 0, players: [] };
               this.rooms.push(room);
             }
@@ -198,53 +181,34 @@ export default class Server implements Party.Server {
             // If so, generate a new unique ID to prevent duplicate player issues
             let clientPlayerId = parsedContent.player.id;
             const existingPlayerWithSameId = room.players.find(
-              (p) => p.id === clientPlayerId
+              (p) => p.id === clientPlayerId,
             );
-            
+
             if (existingPlayerWithSameId && clientPlayerId) {
-              console.log("⚠️ [playerEnters] Duplicate playerId detected! Generating new ID:", {
-                duplicateId: clientPlayerId,
-                existingPlayerName: existingPlayerWithSameId.name,
-                newPlayerName: parsedContent.player.name,
-              });
               // Generate a new unique ID for this player
               clientPlayerId = this.generatePlayerId();
               // Tell client to use this new ID
-              sender.send(JSON.stringify({ 
-                type: "playerId", 
-                id: clientPlayerId,
-                message: "Your playerId was duplicated, assigned new ID"
-              }));
+              sender.send(
+                JSON.stringify({
+                  type: "playerId",
+                  id: clientPlayerId,
+                  message: "Your playerId was duplicated, assigned new ID",
+                }),
+              );
             }
-            
+
             parsedContent.player.id = clientPlayerId || sender.id;
             parsedContent.player.score = 0;
-            
+
             // Store mapping from connection ID to player ID
             this.connectionToPlayerId.set(sender.id, parsedContent.player.id);
-            
-            console.log("🎮 [playerEnters] Player ID:", {
-              clientProvidedId: parsedContent.player.id,
-              connectionId: sender.id,
-              usingId: parsedContent.player.id,
-            });
 
             room.players.push(parsedContent.player);
             room.count = room.players.length;
-            console.log("🎮 [playerEnters] Room state after adding player:", {
-              roomName: room.name,
-              playerCount: room.count,
-              totalRooms: this.rooms.length,
-              allRooms: this.rooms.map((r) => ({
-                name: r.name,
-                players: r.players.length,
-              })),
-            });
 
             this.players.push(parsedContent.player);
 
             if (!room.deck) {
-              console.log("🎮 [playerEnters] Shuffling new deck for room:", room.name);
               this.deckReady = shuffleInfluencerDeck(
                 startingDeck.influencerCards,
               );
@@ -270,18 +234,7 @@ export default class Server implements Party.Server {
               themeStyle: this.currentTheme,
             };
 
-            console.log("📤 [playerEnters] Broadcasting roomUpdate:", {
-              type: roomUpdateMessage.type,
-              room: roomUpdateMessage.room,
-              playersCount: roomUpdateMessage.players.length,
-              hasDeck: !!roomUpdateMessage.deck,
-            });
-
             this.room.broadcast(JSON.stringify(roomUpdateMessage));
-
-            console.log(
-              `Player ${parsedContent.player.name} (${sender.id}) entered room ${parsedContent.room}`,
-            );
           } catch (error) {
             console.error("Error handling playerEnters:", error);
             sender.send(
@@ -314,29 +267,20 @@ export default class Server implements Party.Server {
           break;
         case "playerReady":
           // Get the player ID from connection mapping
-          const readyPlayerId = this.connectionToPlayerId.get(sender.id) || sender.id;
-          
+          const readyPlayerId =
+            this.connectionToPlayerId.get(sender.id) || sender.id;
+
           // Get tactic cards from client's player data
           const clientReadyPlayer = parsedContent.players?.find(
-            (p: Player) => p.id === readyPlayerId
+            (p: Player) => p.id === readyPlayerId,
           );
           const tacticUsedFromClient = clientReadyPlayer?.tacticUsed || [];
-          
-          console.log("✅ [playerReady] Received playerReady message:", {
-            room: parsedContent.room,
-            connectionId: sender.id,
-            playerId: readyPlayerId,
-            tacticUsed: tacticUsedFromClient,
-            availableRooms: this.rooms.map((r) => r.name),
-          });
-          
+
           // Find the specific room this player is in
           const readyRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
-          
-          console.log("✅ [playerReady] Found room:", readyRoom?.name, "with players:", readyRoom?.players?.length);
-          
+
           if (readyRoom) {
             // Update ONLY the player who sent the ready message
             // Do NOT merge client player data - only update isReady and tacticUsed
@@ -364,17 +308,6 @@ export default class Server implements Party.Server {
             });
 
             // Broadcast only to players in this room
-            console.log("✅ [playerReady] Broadcasting playerReady update:", {
-              room: parsedContent.room,
-              playersCount: readyRoom.players.length,
-              playersReady: readyRoom.players.map((p) => ({
-                id: p.id,
-                name: p.name,
-                isReady: p.isReady,
-                tacticUsedLength: p.tacticUsed?.length,
-              })),
-            });
-            
             this.room.broadcast(
               JSON.stringify({
                 type: "playerReady",
@@ -387,14 +320,9 @@ export default class Server implements Party.Server {
           break;
         case "playerNotReady":
           // Get the player ID from connection mapping
-          const notReadyPlayerId = this.connectionToPlayerId.get(sender.id) || sender.id;
-          
-          console.log("❌ [playerNotReady] Received playerNotReady message:", {
-            room: parsedContent.room,
-            connectionId: sender.id,
-            playerId: notReadyPlayerId,
-          });
-          
+          const notReadyPlayerId =
+            this.connectionToPlayerId.get(sender.id) || sender.id;
+
           // Find the specific room this player is in
           const notReadyRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
@@ -441,31 +369,21 @@ export default class Server implements Party.Server {
           break;
         case "playerLeaves":
           // Get the player ID from connection mapping
-          const leavingPlayerId = this.connectionToPlayerId.get(sender.id) || sender.id;
-          
-          console.log("👋 [playerLeaves] Player leaving:", {
-            connectionId: sender.id,
-            playerId: leavingPlayerId,
-            room: parsedContent.room,
-          });
-          
+          const leavingPlayerId =
+            this.connectionToPlayerId.get(sender.id) || sender.id;
+
           // Find the room this player is leaving
           const leavingRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
-          
+
           if (leavingRoom) {
             // Remove player from room
             leavingRoom.players = leavingRoom.players.filter(
               (player) => player.id !== leavingPlayerId,
             );
             leavingRoom.count = leavingRoom.players.length;
-            
-            console.log("👋 [playerLeaves] Updated room:", {
-              roomName: leavingRoom.name,
-              remainingPlayers: leavingRoom.count,
-            });
-            
+
             // Broadcast updated room state
             this.room.broadcast(
               JSON.stringify({
@@ -480,20 +398,18 @@ export default class Server implements Party.Server {
                 themeStyle: this.currentTheme,
               }),
             );
-            
+
             // If room is now empty, reset it
             if (leavingRoom.count === 0) {
-              console.log(
-                `🔄 [playerLeaves] Room ${leavingRoom.name} is now empty. Resetting all state...`,
-              );
-              
               // Remove room from list
-              this.rooms = this.rooms.filter((r) => r.name !== leavingRoom.name);
-              
+              this.rooms = this.rooms.filter(
+                (r) => r.name !== leavingRoom.name,
+              );
+
               // Reset room-specific tracking data
               this.scoredRounds.delete(leavingRoom.name);
               this.roomRounds.delete(leavingRoom.name);
-              
+
               // Reset all game state for fresh start
               this.currentRound = 1;
               this.currentNewsCard = null;
@@ -508,18 +424,16 @@ export default class Server implements Party.Server {
               this.playedCards = [];
               this.tacticsUsed = [];
               this.wasScored = false;
-              
-              console.log(
-                `✅ [playerLeaves] Room ${leavingRoom.name} fully reset and ready for new game`,
-              );
             }
           }
-          
+
           // Remove from global players list
-          this.players = this.players.filter((player) => player.id !== leavingPlayerId);
+          this.players = this.players.filter(
+            (player) => player.id !== leavingPlayerId,
+          );
           // Clean up connection mapping
           this.connectionToPlayerId.delete(sender.id);
-          
+
           break;
         case "allReady":
           const allReady = this.players.every((player) => player.isReady);
@@ -558,33 +472,23 @@ export default class Server implements Party.Server {
           break;
         case "playerLeaves": {
           // Get the player ID from connection mapping
-          const leavePlayerId = this.connectionToPlayerId.get(sender.id) || sender.id;
-          
-          console.log("🚪 [playerLeaves] Received playerLeaves message:", {
-            room: parsedContent.room,
-            connectionId: sender.id,
-            playerId: leavePlayerId,
-            currentRooms: this.rooms.map((r) => ({ name: r.name, count: r.count })),
-          });
-          
+          const leavePlayerId =
+            this.connectionToPlayerId.get(sender.id) || sender.id;
+
           // Remove player from the specified room using mapped player ID
           const leaveRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
-          
-          console.log("🚪 [playerLeaves] Found room:", leaveRoom?.name, "players before:", leaveRoom?.count);
-          
+
           if (leaveRoom) {
             leaveRoom.players = leaveRoom.players.filter(
               (p) => p.id !== leavePlayerId,
             );
             leaveRoom.count = leaveRoom.players.length;
-            
-            console.log("🚪 [playerLeaves] Players after removal:", leaveRoom.count);
 
             // Update global players list
             this.players = this.players.filter((p) => p.id !== leavePlayerId);
-            
+
             // Clean up connection mapping
             this.connectionToPlayerId.delete(sender.id);
 
@@ -604,10 +508,6 @@ export default class Server implements Party.Server {
 
             // Remove empty room and reset all game state
             if (leaveRoom.count === 0) {
-              console.log(
-                `🔄 [playerLeaves] Room ${leaveRoom.name} is now empty. Resetting all state...`,
-              );
-
               // Remove room from list
               this.rooms = this.rooms.filter((r) => r.name !== leaveRoom.name);
 
@@ -629,31 +529,15 @@ export default class Server implements Party.Server {
               this.playedCards = [];
               this.tacticsUsed = [];
               this.wasScored = false;
-
-              console.log(
-                `✅ [playerLeaves] Room ${leaveRoom.name} fully reset and ready for new game`,
-              );
             }
           }
           break;
         }
         case "endOfRound":
-          console.log("📥 [endOfRound] Received endOfRound message:", {
-            room: parsedContent.room,
-            playersCount: parsedContent.players?.length,
-            round: parsedContent.round,
-          });
-
           // Identify the room this round belongs to so we only score that room
           const roundRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
-
-          console.log("📥 [endOfRound] Found room:", {
-            roomName: roundRoom?.name,
-            roomPlayersCount: roundRoom?.players?.length,
-            availableRooms: this.rooms.map((r) => r.name),
-          });
 
           const playersToScore = Array.isArray(parsedContent.players)
             ? parsedContent.players
@@ -675,9 +559,6 @@ export default class Server implements Party.Server {
             const scoredRoundsForRoom = this.scoredRounds.get(roomKey)!;
 
             if (scoredRoundsForRoom.has(roundNumber)) {
-              console.log(
-                `⚠️ [endOfRound] Round ${roundNumber} already scored for room ${roomKey}, ignoring duplicate`,
-              );
               break;
             }
 
@@ -704,18 +585,6 @@ export default class Server implements Party.Server {
               // Don't reset player state here - it will be reset when the next round starts
               // This prevents duplicate endOfRound messages from re-scoring
 
-              console.log("📤 [endOfRound] Broadcasting scoreUpdate:", {
-                room: roundRoom.name,
-                playersCount: roundRoom.players.length,
-                playersSample: roundRoom.players.map((p) => ({
-                  name: p.name,
-                  wasCorrect: p.wasCorrect,
-                  streak: p.streak,
-                  hasStreak: p.hasStreak,
-                  score: p.score,
-                })),
-              });
-
               this.room.broadcast(
                 JSON.stringify({
                   type: "scoreUpdate",
@@ -724,15 +593,12 @@ export default class Server implements Party.Server {
                 }),
               );
 
-              console.log("📤 [endOfRound] ✅ scoreUpdate broadcast complete");
-
               // Update last scored round for this room and advance to next round
               this.roomRounds.set(roomKey, roundNumber);
-              
+
               // Advance the server's current round to the next round
               // This ensures new players joining will sync to the correct round
               this.currentRound = roundNumber + 1;
-              console.log(`🔄 [endOfRound] Advanced to round ${this.currentRound}`);
 
               // Prepare players for the next round without touching score/streak
               // Clear tactics and readiness so next round scoring only considers fresh choices
@@ -753,21 +619,10 @@ export default class Server implements Party.Server {
           } else {
             console.error(
               "❌ [endOfRound] Invalid players data or room not found:",
-              {
-                hasRoundRoom: !!roundRoom,
-                roomName: parsedContent.room,
-                hasPlayersToScore: Array.isArray(playersToScore),
-                availableRooms: this.rooms.map((r) => r.name),
-              },
             );
           }
           break;
         default:
-          console.log(
-            parsedContent,
-            "this is what my parsedContent is getting ",
-          );
-          console.log(`Unknown message type: ${parsedContent?.type}`);
           break;
       }
     } catch (error) {
@@ -783,13 +638,9 @@ export default class Server implements Party.Server {
 
   onClose(connection: Party.Connection) {
     // Get the player ID from connection mapping
-    const playerId = this.connectionToPlayerId.get(connection.id) || connection.id;
-    
-    console.log("🔌 [onClose] Connection closed:", {
-      connectionId: connection.id,
-      playerId: playerId,
-    });
-    
+    const playerId =
+      this.connectionToPlayerId.get(connection.id) || connection.id;
+
     this.room.broadcast(
       JSON.stringify({
         type: "announcement",
@@ -801,13 +652,9 @@ export default class Server implements Party.Server {
     const room = this.rooms.find((r) =>
       r.players.some((player) => player.id === playerId),
     );
-    
-    console.log("🔌 [onClose] Found room for player:", room?.name, "currentRooms:", this.rooms.map((r) => r.name));
 
     if (room) {
-      room.players = room.players.filter(
-        (player) => player.id !== playerId,
-      );
+      room.players = room.players.filter((player) => player.id !== playerId);
       room.count = room.players.length;
 
       this.room.broadcast(
@@ -826,10 +673,6 @@ export default class Server implements Party.Server {
 
       // If the room is empty, reset it to initial state
       if (room.count === 0) {
-        console.log(
-          `🔄 [onClose] Room ${room.name} is now empty. Resetting all state...`,
-        );
-
         // Remove room from list
         this.rooms = this.rooms.filter((r) => r.name !== room.name);
 
@@ -851,10 +694,6 @@ export default class Server implements Party.Server {
         this.playedCards = [];
         this.tacticsUsed = [];
         this.wasScored = false;
-
-        console.log(
-          `✅ [onClose] Room ${room.name} fully reset and ready for new game`,
-        );
       }
     }
 

@@ -7,14 +7,14 @@ export function calculateScore(
   fromClientPlayers: Player[],
   players: Player[],
   influencerCard: InfluencerCard,
-  currentRound: number
+  currentRound: number,
 ): Player[] {
   const streakBonus = currentRound < 5 ? 1 : currentRound < 10 ? 2 : 3;
 
   // Process each player in the existing players array
   const updatedPlayers = players.map((existingPlayer) => {
     const clientPlayer = fromClientPlayers.find(
-      (p) => p.id === existingPlayer.id
+      (p) => p.id === existingPlayer.id,
     );
 
     // If the player is not found in client players, return the existing player unchanged
@@ -30,19 +30,12 @@ export function calculateScore(
       // Filter out correct and wrong tactics
       const correctTactics =
         clientPlayer.tacticUsed?.filter((tactic) =>
-          influencerCard.tactic.includes(tactic)
+          influencerCard.tactic.includes(tactic),
         ) || [];
       const wrongTactics =
         clientPlayer.tacticUsed?.filter(
-          (tactic) => !influencerCard.tactic.includes(tactic)
+          (tactic) => !influencerCard.tactic.includes(tactic),
         ) || [];
-
-      console.log(`🎯 [calculateScore] Player ${clientPlayer.id}:`, {
-        tacticUsed: clientPlayer.tacticUsed,
-        influencerTactics: influencerCard.tactic,
-        correctTactics,
-        wrongTactics,
-      });
 
       // Process correct tactics
       if (correctTactics.length > 0) {
@@ -58,25 +51,14 @@ export function calculateScore(
           score += WRONG_ANSWER * 50;
         });
       }
-
-      console.log(
-        `📊 [calculateScore] Round score for ${clientPlayer.id}: ${score}`
-      );
     }
 
     // Add the players current score to the new points for this round
-    console.log(
-      `💰 [calculateScore] Before: currentScore=${currentScore}, roundScore=${score}, prevStreak=${prevStreak}`
-    );
     let updatedScore = currentScore + score;
     updatedScore = Math.max(updatedScore, 0); // Ensure score doesn't go below 0
 
     // Update streak: increment if player got any correct answers, reset if all wrong
     const streak = anyCorrect ? prevStreak + 1 : 0;
-
-    console.log(
-      `💰 [calculateScore] After: updatedScore=${updatedScore}, streak=${streak}, anyCorrect=${anyCorrect}`
-    );
 
     const updatedPlayer: Player = {
       ...existingPlayer,
