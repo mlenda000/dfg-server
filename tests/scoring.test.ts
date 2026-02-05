@@ -17,7 +17,7 @@ describe("Scoring Logic Tests", () => {
     score: number = 0,
     streak: number = 0,
     tacticUsed: string[] = [],
-    scoreUpdated: boolean = false
+    scoreUpdated: boolean = false,
   ): Player => ({
     id,
     name,
@@ -26,7 +26,7 @@ describe("Scoring Logic Tests", () => {
     score,
     streak,
     hasStreak: streak >= 3,
-    status: false,
+    isReady: false,
     tacticUsed,
     wasCorrect: false,
     scoreUpdated,
@@ -52,7 +52,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].score).toBe(correctMultiplier * baseScore * 2); // 2 correct tactics
@@ -82,7 +82,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].score).toBe(100 + wrongMultiplier * baseScore * 2); // Original score + penalty
@@ -109,12 +109,12 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       // Should get +100 for correct and -50 for wrong = +50 total
       expect(result[0].score).toBe(
-        50 + correctMultiplier * baseScore + wrongMultiplier * baseScore
+        50 + correctMultiplier * baseScore + wrongMultiplier * baseScore,
       );
       expect(result[0].wasCorrect).toBe(true); // Any correct should set wasCorrect to true
       expect(result[0].scoreUpdated).toBe(true);
@@ -139,7 +139,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].score).toBe(0); // Should be capped at 0
@@ -164,7 +164,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].score).toBe(correctMultiplier * baseScore); // Player 1: 100
@@ -190,7 +190,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].score).toBe(100 + correctMultiplier * baseScore); // Player 1 scored
@@ -212,7 +212,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].streak).toBe(3); // Should increment from 2 to 3
@@ -233,7 +233,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].streak).toBe(0); // Should reset to 0
@@ -259,7 +259,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].streak).toBe(3); // Should increment because one was correct
@@ -282,7 +282,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        currentRound
+        currentRound,
       );
 
       const expectedScore = 100 + correctMultiplier * baseScore + 1 * baseScore; // Base + correct + streak bonus
@@ -304,7 +304,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        currentRound
+        currentRound,
       );
 
       const expectedScore = 100 + correctMultiplier * baseScore + 2 * baseScore; // Base + correct + higher streak bonus
@@ -325,7 +325,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        currentRound
+        currentRound,
       );
 
       const expectedScore = 100 + correctMultiplier * baseScore + 3 * baseScore; // Base + correct + highest streak bonus
@@ -345,7 +345,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       const expectedScore = 100 + correctMultiplier * baseScore; // Only base + correct, no streak bonus
@@ -366,7 +366,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].score).toBe(100); // No change
@@ -386,7 +386,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].score).toBe(100); // No change when no tactics to match
@@ -403,7 +403,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(result[0].score).toBe(100); // Should handle gracefully
@@ -426,7 +426,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        1
+        1,
       );
 
       expect(areAllScoresUpdated(result)).toBe(true);
@@ -461,7 +461,7 @@ describe("Scoring Logic Tests", () => {
         fromClientPlayers,
         players,
         influencerCard,
-        currentRound
+        currentRound,
       );
 
       // Player 1: 100 + 100 (correct) + 100 (streak bonus) = 300
@@ -489,18 +489,19 @@ describe("Scoring Logic Tests", () => {
         100,
         3,
         ["tactic1"],
-        true
+        true,
       );
-      player.status = true;
+      player.isReady = true;
 
       resetPlayerForNextRound(player);
 
       expect(player.tacticUsed).toEqual([]);
-      expect(player.status).toBe(false);
+      expect(player.isReady).toBe(false);
       expect(player.scoreUpdated).toBe(false);
-      // Other properties should remain unchanged
+      expect(player.streak).toBe(0); // Streak is reset for next round
+      expect(player.hasStreak).toBe(false); // hasStreak is reset
+      // Score should remain unchanged
       expect(player.score).toBe(100);
-      expect(player.streak).toBe(3);
     });
   });
 });

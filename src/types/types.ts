@@ -19,6 +19,12 @@ export type Room = {
   deck?: ShuffledDeck;
   round?: number;
   type?: string; // Added type to Room for deck retrieval
+  // Room-specific game state
+  currentRound?: number;
+  currentNewsCard?: any;
+  currentTheme?: string;
+  influencerCard?: InfluencerCard;
+  wasScored?: boolean;
 };
 export type PlayerCard = { id: string; content: string };
 export type InfluencerCard = { villain: string; tactic: string[] };

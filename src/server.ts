@@ -21,13 +21,13 @@ export default class Server implements Party.Server {
     // Log on first instance creation (per room)
   }
 
-  // Counter for generating unique player IDs (static-like behavior per server instance)
-  static playerIdCounter = 0;
+  // Counter for generating unique player IDs (instance property to avoid sharing across rooms)
+  private playerIdCounter = 0;
 
   // Generate a unique player ID
   generatePlayerId(): string {
-    Server.playerIdCounter++;
-    return `player_${Date.now()}_${Server.playerIdCounter}_${Math.random().toString(36).substring(2, 8)}`;
+    this.playerIdCounter++;
+    return `player_${Date.now()}_${this.room.id}_${this.playerIdCounter}_${Math.random().toString(36).substring(2, 8)}`;
   }
 
   players: Player[] = [];
@@ -209,15 +209,25 @@ export default class Server implements Party.Server {
             this.players.push(parsedContent.player);
 
             if (!room.deck) {
-              this.deckReady = shuffleInfluencerDeck(
+              const deckData = shuffleInfluencerDeck(
                 startingDeck.influencerCards,
               );
-              this.shuffledDeck = {
+              room.deck = {
                 type: "shuffledDeck",
-                data: this.deckReady,
+                data: deckData,
                 isShuffled: true,
               };
-              room.deck = this.shuffledDeck;
+            }
+
+            // Initialize room-specific state if not set
+            if (room.currentRound === undefined) {
+              room.currentRound = 1;
+            }
+            if (room.currentTheme === undefined) {
+              room.currentTheme = "all";
+            }
+            if (room.influencerCard === undefined) {
+              room.influencerCard = { villain: "biost", tactic: [] };
             }
 
             // Broadcast updated room data to all players in the room
@@ -228,10 +238,10 @@ export default class Server implements Party.Server {
               count: room.count,
               players: room.players,
               deck: room.deck,
-              currentRound: this.currentRound,
-              cardIndex: this.currentRound - 1, // card index corresponds to round
-              newsCard: this.currentNewsCard,
-              themeStyle: this.currentTheme,
+              currentRound: room.currentRound,
+              cardIndex: (room.currentRound || 1) - 1, // card index corresponds to round
+              newsCard: room.currentNewsCard,
+              themeStyle: room.currentTheme,
             };
 
             this.room.broadcast(JSON.stringify(roomUpdateMessage));
@@ -248,18 +258,36 @@ export default class Server implements Party.Server {
           break;
 
         case "influencer":
+          // Find the room to store room-specific state
+          const influencerRoom =
+            this.rooms.find((r) => r.name === parsedContent.room) ||
+            this.rooms[0]; // Fall back to first room if room name not provided
+
           // Store the influencer card with the correct tactic array for scoring
-          this.influencerCard = {
+          const newInfluencerCard = {
             villain: parsedContent.villain || "",
             tactic:
               parsedContent.tactic || parsedContent.newsCard?.tacticUsed || [],
           };
+
+          // Store in both room-specific and instance-level for backward compatibility
+          this.influencerCard = newInfluencerCard;
+          if (influencerRoom) {
+            influencerRoom.influencerCard = newInfluencerCard;
+          }
+
           // Store the full newsCard and theme for new players joining
           if (parsedContent.newsCard) {
             this.currentNewsCard = parsedContent.newsCard;
+            if (influencerRoom) {
+              influencerRoom.currentNewsCard = parsedContent.newsCard;
+            }
           }
           if (parsedContent.villain) {
             this.currentTheme = parsedContent.villain;
+            if (influencerRoom) {
+              influencerRoom.currentTheme = parsedContent.villain;
+            }
           }
           this.room.broadcast(
             JSON.stringify({ type: "villain", villain: parsedContent.villain }),
@@ -384,7 +412,7 @@ export default class Server implements Party.Server {
             );
             leavingRoom.count = leavingRoom.players.length;
 
-            // Broadcast updated room state
+            // Broadcast updated room state using room-specific values
             this.room.broadcast(
               JSON.stringify({
                 type: "roomUpdate",
@@ -392,10 +420,10 @@ export default class Server implements Party.Server {
                 count: leavingRoom.count,
                 players: leavingRoom.players,
                 deck: leavingRoom.deck,
-                currentRound: this.currentRound,
-                cardIndex: this.currentRound - 1,
-                newsCard: this.currentNewsCard,
-                themeStyle: this.currentTheme,
+                currentRound: leavingRoom.currentRound || 1,
+                cardIndex: (leavingRoom.currentRound || 1) - 1,
+                newsCard: leavingRoom.currentNewsCard,
+                themeStyle: leavingRoom.currentTheme || "all",
               }),
             );
 
@@ -410,7 +438,7 @@ export default class Server implements Party.Server {
               this.scoredRounds.delete(leavingRoom.name);
               this.roomRounds.delete(leavingRoom.name);
 
-              // Reset all game state for fresh start
+              // Reset instance-level game state for fresh start
               this.currentRound = 1;
               this.currentNewsCard = null;
               this.currentTheme = "all";
@@ -442,32 +470,29 @@ export default class Server implements Party.Server {
           );
           break;
         case "startingDeck":
-          if (
-            !this.shuffledDeck.isShuffled &&
-            this.deckReady.length === 0 &&
-            !this.deckReady
-          ) {
-            this.deckReady = shuffleInfluencerDeck(parsedContent.data);
-            this.shuffledDeck = {
-              type: "shuffledDeck",
-              data: this.deckReady,
-              isShuffled: true,
-            };
-          }
-
+          // Find or create the room
           let currentRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
+
           if (currentRoom && !currentRoom.deck) {
-            currentRoom.deck = this.shuffledDeck;
+            // Shuffle deck for this specific room
+            const deckData = shuffleInfluencerDeck(parsedContent.data);
+            currentRoom.deck = {
+              type: "shuffledDeck",
+              data: deckData,
+              isShuffled: true,
+            };
             this.rooms = this.rooms.map((room) =>
               room.name === currentRoom.name ? currentRoom : room,
             );
+            this.room.broadcast(JSON.stringify(currentRoom.deck));
+          } else if (currentRoom?.deck) {
+            // Room already has a deck, broadcast existing deck
+            this.room.broadcast(JSON.stringify(currentRoom.deck));
           } else {
             console.error(`Room ${parsedContent.room} not found.`);
           }
-
-          this.room.broadcast(JSON.stringify(this.shuffledDeck));
 
           break;
         case "endOfRound":
@@ -502,10 +527,14 @@ export default class Server implements Party.Server {
             // Mark this round as scored
             scoredRoundsForRoom.add(roundNumber);
 
+            // Use room-specific influencer card if available, fall back to instance-level
+            const influencerCardForScoring =
+              roundRoom.influencerCard || this.influencerCard;
+
             const updatedPlayers = calculateScore(
               playersToScore,
               roundRoom.players,
-              this.influencerCard,
+              influencerCardForScoring,
               roundNumber,
             );
 
@@ -533,8 +562,10 @@ export default class Server implements Party.Server {
               // Update last scored round for this room and advance to next round
               this.roomRounds.set(roomKey, roundNumber);
 
-              // Advance the server's current round to the next round
+              // Advance the room's current round to the next round
               // This ensures new players joining will sync to the correct round
+              roundRoom.currentRound = roundNumber + 1;
+              // Also update instance-level for backward compatibility
               this.currentRound = roundNumber + 1;
 
               // Prepare players for the next round without touching score/streak
@@ -601,10 +632,10 @@ export default class Server implements Party.Server {
           count: room.count,
           players: room.players,
           deck: room.deck,
-          currentRound: this.currentRound,
-          cardIndex: this.currentRound - 1,
-          newsCard: this.currentNewsCard,
-          themeStyle: this.currentTheme,
+          currentRound: room.currentRound || 1,
+          cardIndex: (room.currentRound || 1) - 1,
+          newsCard: room.currentNewsCard,
+          themeStyle: room.currentTheme || "all",
         }),
       );
 
@@ -617,7 +648,7 @@ export default class Server implements Party.Server {
         this.scoredRounds.delete(room.name);
         this.roomRounds.delete(room.name);
 
-        // Reset all game state for fresh start
+        // Reset instance-level game state for fresh start
         this.currentRound = 1;
         this.currentNewsCard = null;
         this.currentTheme = "all";
@@ -687,10 +718,13 @@ export const getInfluencerCards = (room: Party.Room) => {
 };
 
 // Utility function to shuffle the influencer deck
+// Creates a deep copy to avoid mutating the cached import
 export function shuffleInfluencerDeck(array: object[]) {
-  for (let i = array.length - 1; i > 0; i--) {
+  // Create a deep copy to avoid mutating the original imported array
+  const shuffled = JSON.parse(JSON.stringify(array));
+  for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]]; // Swap elements
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; // Swap elements
   }
-  return array;
+  return shuffled;
 }

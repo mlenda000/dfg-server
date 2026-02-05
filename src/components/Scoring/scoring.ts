@@ -164,7 +164,7 @@ export function calculateScore(
 
 export function resetPlayerForNextRound(player: Player) {
   player.tacticUsed = [];
-  player.status = false;
+  player.isReady = false;
   player.scoreUpdated = false;
   player.streak = 0; // Reset streak for next round
   player.hasStreak = false; // Reset hasStreak flag
