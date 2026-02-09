@@ -710,6 +710,19 @@ export default class Server implements Party.Server {
 
               // Update instance-level for backward compatibility
               this.currentRound = roundNumber + 1;
+
+              // Broadcast the reset player state so clients update their UI (e.g., hide ready icons)
+              const resetPlayers =
+                roundGameRoom?.players || roundRoom?.players || [];
+              this.room.broadcast(
+                JSON.stringify({
+                  type: "roomUpdate",
+                  room: roomKey,
+                  players: resetPlayers,
+                  currentRound: roundNumber + 1,
+                  count: resetPlayers.length,
+                }),
+              );
             } else {
               console.error(
                 "Not all players have their scores updated for room",
