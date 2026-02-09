@@ -1,0 +1,216 @@
+import type { Player, InfluencerCard, ShuffledDeck } from "../../types/types";
+import startingDeck from "../../data/influencerCards.json";
+
+/**
+ * GameRoom class encapsulates all state for a single game room.
+ * Each room has its own isolated deck, round, players, and game state.
+ */
+export class GameRoom {
+  readonly id: string;
+  readonly name: string;
+
+  // Players in this room
+  players: Player[] = [];
+
+  // Deck state - each room gets its own shuffled deck
+  deck: ShuffledDeck = {
+    type: "shuffledDeck",
+    data: [],
+    isShuffled: false,
+  };
+
+  // Game round state
+  currentRound: number = 1;
+
+  // Current card/theme state
+  currentNewsCard: any = null;
+  currentTheme: string = "all";
+  influencerCard: InfluencerCard = { villain: "biost", tactic: [] };
+
+  // Scoring state
+  wasScored: boolean = false;
+  scoredRounds: Set<number> = new Set();
+  lastScoredRound: number = 0;
+
+  constructor(id: string, name: string) {
+    this.id = id;
+    this.name = name;
+    // Initialize with a freshly shuffled deck for this room
+    this.shuffleDeck();
+  }
+
+  /**
+   * Shuffles the influencer deck for this room.
+   * Creates a deep copy to avoid mutating the original data.
+   */
+  shuffleDeck(): void {
+    const array = JSON.parse(JSON.stringify(startingDeck.influencerCards));
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    this.deck = {
+      type: "shuffledDeck",
+      data: array,
+      isShuffled: true,
+    };
+  }
+
+  /**
+   * Get the player count in this room
+   */
+  get count(): number {
+    return this.players.length;
+  }
+
+  /**
+   * Check if room is full (max 5 players)
+   */
+  get isFull(): boolean {
+    return this.players.length >= 5;
+  }
+
+  /**
+   * Check if room is empty
+   */
+  get isEmpty(): boolean {
+    return this.players.length === 0;
+  }
+
+  /**
+   * Add a player to the room
+   */
+  addPlayer(player: Player): boolean {
+    if (this.isFull) {
+      return false;
+    }
+
+    // Check for duplicate player ID
+    const existingIndex = this.players.findIndex((p) => p.id === player.id);
+    if (existingIndex >= 0) {
+      // Update existing player instead of adding duplicate
+      this.players[existingIndex] = player;
+    } else {
+      this.players.push(player);
+    }
+    return true;
+  }
+
+  /**
+   * Remove a player from the room by ID
+   */
+  removePlayer(playerId: string): Player | null {
+    const index = this.players.findIndex((p) => p.id === playerId);
+    if (index >= 0) {
+      const [removed] = this.players.splice(index, 1);
+      return removed;
+    }
+    return null;
+  }
+
+  /**
+   * Find a player by ID
+   */
+  getPlayer(playerId: string): Player | undefined {
+    return this.players.find((p) => p.id === playerId);
+  }
+
+  /**
+   * Update a specific player
+   */
+  updatePlayer(playerId: string, updates: Partial<Player>): Player | null {
+    const player = this.getPlayer(playerId);
+    if (player) {
+      Object.assign(player, updates);
+      return player;
+    }
+    return null;
+  }
+
+  /**
+   * Check if a round has already been scored
+   */
+  isRoundScored(round: number): boolean {
+    return this.scoredRounds.has(round);
+  }
+
+  /**
+   * Mark a round as scored
+   */
+  markRoundScored(round: number): void {
+    this.scoredRounds.add(round);
+    this.lastScoredRound = Math.max(this.lastScoredRound, round);
+  }
+
+  /**
+   * Advance to the next round
+   */
+  advanceRound(): void {
+    this.currentRound++;
+    // Reset player ready states for new round
+    this.players.forEach((player) => {
+      player.isReady = false;
+      player.tacticUsed = [];
+      player.scoreUpdated = false;
+      player.streakUpdated = false;
+    });
+  }
+
+  /**
+   * Reset the room to initial state (when all players leave)
+   */
+  reset(): void {
+    this.players = [];
+    this.currentRound = 1;
+    this.currentNewsCard = null;
+    this.currentTheme = "all";
+    this.influencerCard = { villain: "biost", tactic: [] };
+    this.wasScored = false;
+    this.scoredRounds.clear();
+    this.lastScoredRound = 0;
+    this.shuffleDeck();
+  }
+
+  /**
+   * Get the current card index (0-based, corresponds to round - 1)
+   */
+  get cardIndex(): number {
+    return Math.max(0, this.currentRound - 1);
+  }
+
+  /**
+   * Serialize room data for broadcasting to clients
+   */
+  toRoomUpdate(): object {
+    return {
+      type: "roomUpdate",
+      room: this.name,
+      count: this.count,
+      players: this.players,
+      deck: this.deck,
+      currentRound: this.currentRound,
+      cardIndex: this.cardIndex,
+      newsCard: this.currentNewsCard,
+      themeStyle: this.currentTheme,
+    };
+  }
+
+  /**
+   * Convert to legacy Room interface for backward compatibility
+   */
+  toLegacyRoom(): object {
+    return {
+      name: this.name,
+      count: this.count,
+      players: this.players,
+      deck: this.deck,
+      currentRound: this.currentRound,
+      currentNewsCard: this.currentNewsCard,
+      currentTheme: this.currentTheme,
+      influencerCard: this.influencerCard,
+      wasScored: this.wasScored,
+    };
+  }
+}
+
+export default GameRoom;

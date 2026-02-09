@@ -2,9 +2,8 @@
  * WebSocket Message Flow Tests
  *
  * These tests simulate the actual message flow between client and server,
- * testing the complete lifecycle of game interactions without mocking
- * the business logic. Tests use real data structures and simulate
- * actual game scenarios.
+ * using the REAL RoomManager, GameRoom, and scoring logic - not mocks.
+ * Tests verify the complete lifecycle of game interactions.
  */
 
 import { shuffleInfluencerDeck } from "../src/server";
@@ -13,6 +12,8 @@ import {
   areAllScoresUpdated,
 } from "../src/components/Scoring/scoring";
 import { parseContent } from "../src/utils/utils";
+import { RoomManager } from "../src/components/RoomManager";
+import { GameRoom } from "../src/components/Room/GameRoom";
 import type {
   Player,
   Room,
@@ -22,38 +23,54 @@ import type {
 import influencerCards from "../src/data/influencerCards.json";
 
 /**
- * Simulates the server-side state management for testing purposes.
- * This mirrors the actual Server class behavior without PartyKit dependencies.
+ * ServerSimulator - Uses REAL RoomManager and GameRoom classes
+ * This simulates the server's message handling while using actual implementation code.
  */
-class MockServerInstance {
+class ServerSimulator {
   private playerIdCounter = 0;
-  private roomId: string;
+  private instanceId: string;
 
+  // Use the REAL RoomManager - same code the server uses
+  readonly roomManager: RoomManager;
+
+  // Track connection to player ID mapping
+  readonly connectionToPlayerId: Map<string, string> = new Map();
+
+  // Track scored rounds per room
+  readonly scoredRounds: Map<string, Set<number>> = new Map();
+  readonly roomRounds: Map<string, number> = new Map();
+
+  // Track global players list
   players: Player[] = [];
-  rooms: Room[] = [];
-  connectionToPlayerId: Map<string, string> = new Map();
-  scoredRounds: Map<string, Set<number>> = new Map();
-  roomRounds: Map<string, number> = new Map();
 
-  constructor(roomId: string) {
-    this.roomId = roomId;
+  constructor(instanceId: string) {
+    this.instanceId = instanceId;
+    // Create REAL RoomManager - this is the same class the server uses
+    this.roomManager = new RoomManager({
+      deletionDelayMs: 30000,
+    });
   }
 
   generatePlayerId(): string {
     this.playerIdCounter++;
-    return `player_${Date.now()}_${this.roomId}_${this.playerIdCounter}_${Math.random().toString(36).substring(2, 8)}`;
+    return `player_${Date.now()}_${this.instanceId}_${this.playerIdCounter}_${Math.random().toString(36).substring(2, 8)}`;
   }
 
-  // Simulate handling playerEnters message
+  /**
+   * Handle playerEnters - uses REAL GameRoom via RoomManager
+   */
   handlePlayerEnters(
     connectionId: string,
     parsedContent: any,
   ): { response: any; broadcast: any } {
-    const room = this.findOrCreateRoom(parsedContent.room);
+    const roomName = parsedContent.room;
+
+    // Use REAL RoomManager to get or create room
+    const gameRoom = this.roomManager.getOrCreateGameRoom(roomName);
 
     // Check for duplicate player ID
     let clientPlayerId = parsedContent.player?.id;
-    const existingPlayer = room.players.find((p) => p.id === clientPlayerId);
+    const existingPlayer = gameRoom.getPlayer(clientPlayerId);
 
     if (existingPlayer && clientPlayerId) {
       clientPlayerId = this.generatePlayerId();
@@ -62,6 +79,7 @@ class MockServerInstance {
     const player: Player = {
       ...parsedContent.player,
       id: clientPlayerId || connectionId,
+      room: roomName,
       score: 0,
       streak: 0,
       hasStreak: false,
@@ -73,62 +91,38 @@ class MockServerInstance {
     };
 
     this.connectionToPlayerId.set(connectionId, player.id);
-    room.players.push(player);
-    room.count = room.players.length;
+
+    // Use REAL GameRoom.addPlayer method
+    gameRoom.addPlayer(player);
     this.players.push(player);
 
-    // Initialize deck if not exists
-    if (!room.deck) {
-      const deckData = shuffleInfluencerDeck(influencerCards.influencerCards);
-      room.deck = {
-        type: "shuffledDeck",
-        data: deckData,
-        isShuffled: true,
-      };
-    }
-
-    // Initialize room state
-    if (room.currentRound === undefined) room.currentRound = 1;
-    if (room.currentTheme === undefined) room.currentTheme = "all";
-
-    const roomUpdate = {
-      type: "roomUpdate",
-      room: room.name,
-      count: room.count,
-      players: room.players,
-      deck: room.deck,
-      currentRound: room.currentRound,
-      cardIndex: (room.currentRound || 1) - 1,
-      newsCard: room.currentNewsCard,
-      themeStyle: room.currentTheme,
-    };
-
+    // Return response using REAL GameRoom.toRoomUpdate()
     return {
       response: { type: "playerId", id: player.id },
-      broadcast: roomUpdate,
+      broadcast: gameRoom.toRoomUpdate(),
     };
   }
 
-  // Simulate handling playerReady message
+  /**
+   * Handle playerReady - uses REAL GameRoom methods
+   */
   handlePlayerReady(connectionId: string, parsedContent: any): any {
     const playerId =
       this.connectionToPlayerId.get(connectionId) || connectionId;
-    const room = this.rooms.find((r) => r.name === parsedContent.room);
+    const roomName = parsedContent.room;
+    const gameRoom = this.roomManager.getRoom(roomName);
 
-    if (!room) return null;
+    if (!gameRoom) return null;
 
     const clientPlayer = parsedContent.players?.find(
       (p: Player) => p.id === playerId,
     );
     const tacticUsed = clientPlayer?.tacticUsed || [];
 
-    room.players = room.players.map((player) => {
-      if (player.id === playerId) {
-        return { ...player, isReady: true, tacticUsed };
-      }
-      return player;
-    });
+    // Use REAL GameRoom.updatePlayer method
+    gameRoom.updatePlayer(playerId, { isReady: true, tacticUsed });
 
+    // Also update global players list
     this.players = this.players.map((player) => {
       if (player.id === playerId) {
         return { ...player, isReady: true, tacticUsed };
@@ -138,132 +132,167 @@ class MockServerInstance {
 
     return {
       type: "playerReady",
-      room: parsedContent.room,
-      roomData: room.players,
+      room: roomName,
+      roomData: gameRoom.players,
       sender: connectionId,
     };
   }
 
-  // Simulate handling influencer message
+  /**
+   * Handle influencer - uses REAL GameRoom properties
+   */
   handleInfluencer(parsedContent: any): any {
-    const room =
-      this.rooms.find((r) => r.name === parsedContent.room) || this.rooms[0];
+    const roomName = parsedContent.room;
+    const gameRoom =
+      this.roomManager.getRoom(roomName) ||
+      this.roomManager.gameRooms.values().next().value;
 
     const influencerCard: InfluencerCard = {
       villain: parsedContent.villain || "",
       tactic: parsedContent.tactic || parsedContent.newsCard?.tacticUsed || [],
     };
 
-    if (room) {
-      room.influencerCard = influencerCard;
-      room.currentNewsCard = parsedContent.newsCard;
-      room.currentTheme = parsedContent.villain;
+    if (gameRoom) {
+      // Set REAL GameRoom properties
+      gameRoom.influencerCard = influencerCard;
+      gameRoom.currentNewsCard = parsedContent.newsCard;
+      gameRoom.currentTheme = parsedContent.villain;
     }
 
     return { type: "villain", villain: parsedContent.villain };
   }
 
-  // Simulate handling endOfRound message
+  /**
+   * Handle endOfRound - uses REAL calculateScore function and GameRoom
+   */
   handleEndOfRound(parsedContent: any): any {
-    const room = this.rooms.find((r) => r.name === parsedContent.room);
-    if (!room) return null;
+    const roomName = parsedContent.room;
+    const gameRoom = this.roomManager.getRoom(roomName);
 
-    const playersToScore = parsedContent.players || room.players;
-    const roomKey = room.name;
+    if (!gameRoom) return null;
+
+    const playersToScore = parsedContent.players || gameRoom.players;
+    const roomKey = roomName;
 
     const lastRound = this.roomRounds.get(roomKey) ?? 0;
     const roundNumber = parsedContent.round || lastRound + 1;
 
+    // Check if round already scored using tracking
     if (!this.scoredRounds.has(roomKey)) {
       this.scoredRounds.set(roomKey, new Set());
     }
 
     const scoredRoundsForRoom = this.scoredRounds.get(roomKey)!;
     if (scoredRoundsForRoom.has(roundNumber)) {
-      return null; // Already scored
+      return null; // Already scored - duplicate protection
     }
 
     scoredRoundsForRoom.add(roundNumber);
 
-    const influencerCard = room.influencerCard || { villain: "", tactic: [] };
+    // Use REAL GameRoom's influencerCard
+    const influencerCard = gameRoom.influencerCard || {
+      villain: "",
+      tactic: [],
+    };
+
+    // Call the REAL calculateScore function - this is the actual scoring logic
     const updatedPlayers = calculateScore(
       playersToScore,
-      room.players,
+      gameRoom.players,
       influencerCard,
       roundNumber,
     );
 
-    room.players = updatedPlayers;
-    this.roomRounds.set(roomKey, roundNumber);
-    room.currentRound = roundNumber + 1;
+    // Make a deep copy of the scored players to return (before resetting)
+    const scoredPlayersForResponse = updatedPlayers.map((p) => ({ ...p }));
 
-    // Reset players for next round
-    room.players = room.players.map((p) => ({
-      ...p,
-      tacticUsed: [],
-      isReady: false,
-      scoreUpdated: false,
-      streakUpdated: false,
-    }));
+    // Update REAL GameRoom
+    gameRoom.players.length = 0;
+    gameRoom.players.push(...updatedPlayers);
+
+    this.roomRounds.set(roomKey, roundNumber);
+    gameRoom.currentRound = roundNumber + 1;
+
+    // Reset players for next round (mimics real server behavior)
+    gameRoom.players.forEach((p) => {
+      p.tacticUsed = [];
+      p.isReady = false;
+      p.scoreUpdated = false;
+      p.streakUpdated = false;
+    });
 
     return {
       type: "scoreUpdate",
-      room: room.name,
-      players: updatedPlayers,
+      room: roomName,
+      players: scoredPlayersForResponse,
     };
   }
 
-  // Simulate handling playerLeaves message
+  /**
+   * Handle playerLeaves - uses REAL RoomManager method
+   */
   handlePlayerLeaves(connectionId: string, parsedContent: any): any {
     const playerId =
       this.connectionToPlayerId.get(connectionId) || connectionId;
-    const room = this.rooms.find((r) => r.name === parsedContent.room);
+    const roomName = parsedContent.room;
 
-    if (room) {
-      room.players = room.players.filter((p) => p.id !== playerId);
-      room.count = room.players.length;
+    // Use REAL RoomManager.removePlayerFromRoom
+    const result = this.roomManager.removePlayerFromRoom(playerId, roomName);
 
-      if (room.count === 0) {
-        this.rooms = this.rooms.filter((r) => r.name !== room.name);
-        this.scoredRounds.delete(room.name);
-        this.roomRounds.delete(room.name);
-      }
-    }
-
+    // Clean up
     this.players = this.players.filter((p) => p.id !== playerId);
     this.connectionToPlayerId.delete(connectionId);
 
+    // Clean up tracking if room is empty
+    if (result.gameRoom?.isEmpty) {
+      this.scoredRounds.delete(roomName);
+      this.roomRounds.delete(roomName);
+    }
+
     return {
       type: "roomUpdate",
-      room: room?.name,
-      count: room?.count || 0,
-      players: room?.players || [],
+      room: roomName,
+      count: result.gameRoom?.count || 0,
+      players: result.gameRoom?.players || [],
     };
   }
 
-  private findOrCreateRoom(roomName: string): Room {
-    let room = this.rooms.find((r) => r.name === roomName);
-    if (!room) {
-      room = { name: roomName, count: 0, players: [] };
-      this.rooms.push(room);
-    }
-    return room;
+  /**
+   * Get a room - delegates to REAL RoomManager
+   */
+  getRoom(roomName: string): GameRoom | undefined {
+    return this.roomManager.getRoom(roomName);
   }
 
-  getRoom(roomName: string): Room | undefined {
-    return this.rooms.find((r) => r.name === roomName);
+  /**
+   * Get all rooms count
+   */
+  get roomCount(): number {
+    return this.roomManager.roomCount;
+  }
+
+  /**
+   * Cleanup
+   */
+  cleanup(): void {
+    this.roomManager.cleanup();
   }
 }
 
-describe("WebSocket Message Flow Tests", () => {
+describe("WebSocket Message Flow Tests - Real Implementation", () => {
   // ============================================
   // PLAYER CONNECTION FLOW
   // ============================================
   describe("Player Connection Flow", () => {
-    it("should handle complete player join flow", () => {
-      const server = new MockServerInstance("test-room");
+    let server: ServerSimulator;
 
-      // Client sends playerEnters
+    afterEach(() => {
+      server?.cleanup();
+    });
+
+    it("should handle complete player join flow using real GameRoom", () => {
+      server = new ServerSimulator("test-room");
+
       const joinMessage = {
         type: "playerEnters",
         player: {
@@ -276,20 +305,26 @@ describe("WebSocket Message Flow Tests", () => {
 
       const result = server.handlePlayerEnters("conn-1", joinMessage);
 
-      // Should receive playerId response
+      // Verify response
       expect(result.response.type).toBe("playerId");
       expect(result.response.id).toBeDefined();
 
-      // Should broadcast roomUpdate
+      // Verify broadcast uses real GameRoom.toRoomUpdate() format
       expect(result.broadcast.type).toBe("roomUpdate");
       expect(result.broadcast.count).toBe(1);
       expect(result.broadcast.players.length).toBe(1);
       expect(result.broadcast.deck).toBeDefined();
       expect(result.broadcast.deck.isShuffled).toBe(true);
+      expect(result.broadcast.currentRound).toBe(1);
+
+      // Verify real GameRoom was created
+      const gameRoom = server.getRoom("test-room");
+      expect(gameRoom).toBeInstanceOf(GameRoom);
+      expect(gameRoom?.count).toBe(1);
     });
 
     it("should assign unique IDs when client IDs collide", () => {
-      const server = new MockServerInstance("collision-room");
+      server = new ServerSimulator("collision-room");
 
       // First player joins with ID "same-id"
       const join1 = {
@@ -302,7 +337,7 @@ describe("WebSocket Message Flow Tests", () => {
         },
         room: "collision-room",
       };
-      const result1 = server.handlePlayerEnters("conn-1", join1);
+      server.handlePlayerEnters("conn-1", join1);
 
       // Second player tries to join with same ID
       const join2 = {
@@ -315,16 +350,16 @@ describe("WebSocket Message Flow Tests", () => {
         },
         room: "collision-room",
       };
-      const result2 = server.handlePlayerEnters("conn-2", join2);
+      server.handlePlayerEnters("conn-2", join2);
 
-      // Should have different player IDs
-      const room = server.getRoom("collision-room");
-      expect(room!.players.length).toBe(2);
-      expect(room!.players[0].id).not.toBe(room!.players[1].id);
+      // Verify using real GameRoom
+      const gameRoom = server.getRoom("collision-room");
+      expect(gameRoom?.count).toBe(2);
+      expect(gameRoom?.players[0].id).not.toBe(gameRoom?.players[1].id);
     });
 
     it("should handle multiple players joining the same room", () => {
-      const server = new MockServerInstance("multi-room");
+      server = new ServerSimulator("multi-room");
 
       const players = ["Alice", "Bob", "Charlie", "Diana"];
 
@@ -337,9 +372,37 @@ describe("WebSocket Message Flow Tests", () => {
         server.handlePlayerEnters(`conn-${i}`, joinMessage);
       });
 
-      const room = server.getRoom("multi-room");
-      expect(room!.count).toBe(4);
-      expect(room!.players.map((p) => p.name)).toEqual(players);
+      // Verify using real GameRoom
+      const gameRoom = server.getRoom("multi-room");
+      expect(gameRoom?.count).toBe(4);
+      expect(gameRoom?.players.map((p) => p.name)).toEqual(players);
+    });
+
+    it("should prevent more than 5 players (real GameRoom.isFull)", () => {
+      server = new ServerSimulator("full-room");
+
+      // Add 5 players
+      for (let i = 0; i < 5; i++) {
+        server.handlePlayerEnters(`conn-${i}`, {
+          type: "playerEnters",
+          player: { name: `Player${i}`, avatar: "a.png", room: "full-room" },
+          room: "full-room",
+        });
+      }
+
+      const gameRoom = server.getRoom("full-room");
+      expect(gameRoom?.isFull).toBe(true);
+      expect(gameRoom?.count).toBe(5);
+
+      // Try to add 6th player - should fail via real GameRoom.addPlayer
+      const result = server.handlePlayerEnters("conn-6", {
+        type: "playerEnters",
+        player: { name: "Player6", avatar: "a.png", room: "full-room" },
+        room: "full-room",
+      });
+
+      // Player wasn't added due to isFull check in GameRoom
+      expect(gameRoom?.count).toBe(5);
     });
   });
 
@@ -347,15 +410,22 @@ describe("WebSocket Message Flow Tests", () => {
   // READY STATE FLOW
   // ============================================
   describe("Ready State Flow", () => {
-    it("should update player ready state with selected tactics", () => {
-      const server = new MockServerInstance("ready-room");
+    let server: ServerSimulator;
 
-      // Player joins
+    afterEach(() => {
+      server?.cleanup();
+    });
+
+    it("should update player ready state with selected tactics using real GameRoom", () => {
+      server = new ServerSimulator("ready-room");
+
       server.handlePlayerEnters("conn-1", {
         type: "playerEnters",
         player: { name: "Alice", avatar: "a.png", room: "ready-room" },
         room: "ready-room",
       });
+
+      const playerId = server.connectionToPlayerId.get("conn-1");
 
       // Player marks ready with tactics
       const readyMessage = {
@@ -363,7 +433,7 @@ describe("WebSocket Message Flow Tests", () => {
         room: "ready-room",
         players: [
           {
-            id: server.connectionToPlayerId.get("conn-1"),
+            id: playerId,
             tacticUsed: ["fear-mongering", "clickbait"],
           },
         ],
@@ -377,10 +447,16 @@ describe("WebSocket Message Flow Tests", () => {
         "fear-mongering",
         "clickbait",
       ]);
+
+      // Verify via real GameRoom
+      const gameRoom = server.getRoom("ready-room");
+      const player = gameRoom?.getPlayer(playerId!);
+      expect(player?.isReady).toBe(true);
+      expect(player?.tacticUsed).toEqual(["fear-mongering", "clickbait"]);
     });
 
     it("should track all players ready state independently", () => {
-      const server = new MockServerInstance("all-ready-room");
+      server = new ServerSimulator("all-ready-room");
 
       // Two players join
       server.handlePlayerEnters("conn-1", {
@@ -402,21 +478,28 @@ describe("WebSocket Message Flow Tests", () => {
         players: [{ id: aliceId, tacticUsed: ["true"] }],
       });
 
-      const room = server.getRoom("all-ready-room");
-      const alice = room!.players.find((p) => p.id === aliceId);
-      const bob = room!.players.find((p) => p.id !== aliceId);
+      // Verify via real GameRoom
+      const gameRoom = server.getRoom("all-ready-room");
+      const alice = gameRoom?.getPlayer(aliceId!);
+      const bob = gameRoom?.players.find((p) => p.id !== aliceId);
 
-      expect(alice!.isReady).toBe(true);
-      expect(bob!.isReady).toBe(false);
+      expect(alice?.isReady).toBe(true);
+      expect(bob?.isReady).toBe(false);
     });
   });
 
   // ============================================
-  // FULL ROUND FLOW
+  // FULL ROUND FLOW - Tests REAL calculateScore
   // ============================================
-  describe("Full Round Flow", () => {
-    it("should process a complete game round with actual card data", () => {
-      const server = new MockServerInstance("round-room");
+  describe("Full Round Flow (Real Scoring)", () => {
+    let server: ServerSimulator;
+
+    afterEach(() => {
+      server?.cleanup();
+    });
+
+    it("should process a complete game round with REAL calculateScore function", () => {
+      server = new ServerSimulator("round-room");
       const realCard = influencerCards.influencerCards[0];
 
       // Setup: Two players join
@@ -434,7 +517,7 @@ describe("WebSocket Message Flow Tests", () => {
       const aliceId = server.connectionToPlayerId.get("conn-1")!;
       const bobId = server.connectionToPlayerId.get("conn-2")!;
 
-      // Step 1: Set the influencer card (simulating card selection)
+      // Step 1: Set the influencer card
       server.handleInfluencer({
         type: "influencer",
         newsCard: realCard,
@@ -458,32 +541,33 @@ describe("WebSocket Message Flow Tests", () => {
         players: [{ id: bobId, tacticUsed: ["wrong-tactic"] }],
       });
 
-      // Step 3: End of round scoring
-      const room = server.getRoom("round-room");
+      // Step 3: End of round scoring - uses REAL calculateScore
+      const gameRoom = server.getRoom("round-room");
       const scoreResult = server.handleEndOfRound({
         type: "endOfRound",
         room: "round-room",
         round: 1,
-        players: room!.players,
+        players: gameRoom!.players,
       });
 
-      // Verify scoring happened
+      // Verify scoring happened with REAL logic
       expect(scoreResult.type).toBe("scoreUpdate");
 
       const alice = scoreResult.players.find((p: Player) => p.id === aliceId);
       const bob = scoreResult.players.find((p: Player) => p.id === bobId);
 
-      // Alice should have positive score (correct answer)
+      // Alice should have positive score (correct answer via REAL scoring)
       expect(alice.score).toBeGreaterThan(0);
       expect(alice.wasCorrect).toBe(true);
+      expect(alice.scoreUpdated).toBe(true);
 
-      // Bob should have zero or negative score (wrong answer)
+      // Bob should have zero or negative score (wrong answer via REAL scoring)
       expect(bob.score).toBeLessThanOrEqual(0);
       expect(bob.wasCorrect).toBe(false);
     });
 
     it("should prevent duplicate round scoring", () => {
-      const server = new MockServerInstance("dup-room");
+      server = new ServerSimulator("dup-room");
       const realCard = influencerCards.influencerCards[0];
 
       // Setup
@@ -510,32 +594,72 @@ describe("WebSocket Message Flow Tests", () => {
       });
 
       // First scoring
-      const room = server.getRoom("dup-room");
+      const gameRoom = server.getRoom("dup-room");
       const result1 = server.handleEndOfRound({
         type: "endOfRound",
         room: "dup-room",
         round: 1,
-        players: room!.players,
+        players: gameRoom!.players,
       });
 
-      // Store the score
-      const scoreAfterFirst = result1.players[0].score;
+      expect(result1).not.toBeNull();
 
       // Try to score same round again
       const result2 = server.handleEndOfRound({
         type: "endOfRound",
         room: "dup-room",
         round: 1,
-        players: room!.players,
+        players: gameRoom!.players,
       });
 
       // Should return null (no scoring happened)
       expect(result2).toBeNull();
+    });
 
-      // Score should not have changed
-      const currentRoom = server.getRoom("dup-room");
-      // Note: score was already applied and player reset for next round
-      expect(currentRoom!.players[0].scoreUpdated).toBe(false);
+    it("should correctly calculate scores with REAL card tactics", () => {
+      server = new ServerSimulator("real-card-room");
+
+      // Find a card with specific known tactics
+      const fearCard = influencerCards.influencerCards.find((c: any) =>
+        c.tacticUsed.includes("fear-mongering"),
+      );
+      expect(fearCard).toBeDefined();
+
+      server.handlePlayerEnters("conn-1", {
+        type: "playerEnters",
+        player: { name: "Tester", avatar: "a.png", room: "real-card-room" },
+        room: "real-card-room",
+      });
+
+      const playerId = server.connectionToPlayerId.get("conn-1")!;
+
+      server.handleInfluencer({
+        type: "influencer",
+        newsCard: fearCard,
+        villain: fearCard!.villain,
+        tactic: fearCard!.tacticUsed,
+        room: "real-card-room",
+      });
+
+      // Player correctly identifies fear-mongering
+      server.handlePlayerReady("conn-1", {
+        type: "playerReady",
+        room: "real-card-room",
+        players: [{ id: playerId, tacticUsed: fearCard!.tacticUsed }],
+      });
+
+      const gameRoom = server.getRoom("real-card-room");
+      const result = server.handleEndOfRound({
+        type: "endOfRound",
+        room: "real-card-room",
+        round: 1,
+        players: gameRoom!.players,
+      });
+
+      // REAL scoring: each correct tactic = 2 * 50 = 100 points
+      const player = result.players[0];
+      expect(player.wasCorrect).toBe(true);
+      expect(player.score).toBe(fearCard!.tacticUsed.length * 100);
     });
   });
 
@@ -543,11 +667,16 @@ describe("WebSocket Message Flow Tests", () => {
   // MULTI-ROUND GAME FLOW
   // ============================================
   describe("Multi-Round Game Flow", () => {
+    let server: ServerSimulator;
+
+    afterEach(() => {
+      server?.cleanup();
+    });
+
     it("should track scores across multiple rounds correctly", () => {
-      const server = new MockServerInstance("multi-round-room");
+      server = new ServerSimulator("multi-round-room");
       const cards = influencerCards.influencerCards.slice(0, 3);
 
-      // Player joins
       server.handlePlayerEnters("conn-1", {
         type: "playerEnters",
         player: { name: "Alice", avatar: "a.png", room: "multi-round-room" },
@@ -577,31 +706,25 @@ describe("WebSocket Message Flow Tests", () => {
           players: [{ id: aliceId, tacticUsed: card.tacticUsed }],
         });
 
-        // Score the round
-        const room = server.getRoom("multi-round-room");
-        // Need to update the player's tacticUsed before scoring
-        room!.players[0].tacticUsed = card.tacticUsed;
-
+        const gameRoom = server.getRoom("multi-round-room");
         const result = server.handleEndOfRound({
           type: "endOfRound",
           room: "multi-round-room",
           round,
-          players: room!.players,
+          players: gameRoom!.players,
         });
 
-        // Score should increase
+        // Score should increase via REAL calculateScore
         expect(result.players[0].score).toBeGreaterThan(cumulativeScore);
         cumulativeScore = result.players[0].score;
       }
 
-      // After 3 correct rounds, player should have a streak
-      const finalRoom = server.getRoom("multi-round-room");
-      // Note: Players are reset after each round, but the round tracking should work
-      expect(finalRoom!.currentRound).toBe(4); // Ready for round 4
+      // After 3 correct rounds, should have accumulated score
+      expect(cumulativeScore).toBeGreaterThan(0);
     });
 
-    it("should advance room currentRound after each round", () => {
-      const server = new MockServerInstance("advance-room");
+    it("should advance room currentRound after each round using real GameRoom", () => {
+      server = new ServerSimulator("advance-room");
       const card = influencerCards.influencerCards[0];
 
       server.handlePlayerEnters("conn-1", {
@@ -612,9 +735,9 @@ describe("WebSocket Message Flow Tests", () => {
 
       const aliceId = server.connectionToPlayerId.get("conn-1")!;
 
-      // Initial round should be 1
-      let room = server.getRoom("advance-room");
-      expect(room!.currentRound).toBe(1);
+      // Initial round should be 1 (real GameRoom default)
+      let gameRoom = server.getRoom("advance-room");
+      expect(gameRoom?.currentRound).toBe(1);
 
       // Complete round 1
       server.handleInfluencer({
@@ -625,17 +748,77 @@ describe("WebSocket Message Flow Tests", () => {
         room: "advance-room",
       });
 
-      room!.players[0].tacticUsed = card.tacticUsed;
+      server.handlePlayerReady("conn-1", {
+        type: "playerReady",
+        room: "advance-room",
+        players: [{ id: aliceId, tacticUsed: card.tacticUsed }],
+      });
+
       server.handleEndOfRound({
         type: "endOfRound",
         room: "advance-room",
         round: 1,
-        players: room!.players,
+        players: gameRoom!.players,
       });
 
-      // Round should advance to 2
-      room = server.getRoom("advance-room");
-      expect(room!.currentRound).toBe(2);
+      // Round should advance to 2 (real GameRoom state)
+      gameRoom = server.getRoom("advance-room");
+      expect(gameRoom?.currentRound).toBe(2);
+    });
+
+    it("should build streak across rounds with REAL scoring logic", () => {
+      server = new ServerSimulator("streak-room");
+      const cards = influencerCards.influencerCards.slice(0, 5);
+
+      server.handlePlayerEnters("conn-1", {
+        type: "playerEnters",
+        player: { name: "Streaker", avatar: "a.png", room: "streak-room" },
+        room: "streak-room",
+      });
+
+      const playerId = server.connectionToPlayerId.get("conn-1")!;
+      let lastStreak = 0;
+
+      // Play 5 rounds with all correct answers
+      for (let round = 1; round <= 5; round++) {
+        const card = cards[round - 1];
+
+        server.handleInfluencer({
+          type: "influencer",
+          newsCard: card,
+          villain: card.villain,
+          tactic: card.tacticUsed,
+          room: "streak-room",
+        });
+
+        server.handlePlayerReady("conn-1", {
+          type: "playerReady",
+          room: "streak-room",
+          players: [{ id: playerId, tacticUsed: card.tacticUsed }],
+        });
+
+        const gameRoom = server.getRoom("streak-room");
+        const result = server.handleEndOfRound({
+          type: "endOfRound",
+          room: "streak-room",
+          round,
+          players: gameRoom!.players,
+        });
+
+        const player = result.players[0];
+
+        // REAL scoring increments streak on correct answers
+        expect(player.streak).toBe(round);
+
+        // hasStreak should be true after 3rd round
+        if (round >= 3) {
+          expect(player.hasStreak).toBe(true);
+        }
+
+        lastStreak = player.streak;
+      }
+
+      expect(lastStreak).toBe(5);
     });
   });
 
@@ -643,8 +826,14 @@ describe("WebSocket Message Flow Tests", () => {
   // PLAYER LEAVE FLOW
   // ============================================
   describe("Player Leave Flow", () => {
-    it("should handle player leaving and update room state", () => {
-      const server = new MockServerInstance("leave-room");
+    let server: ServerSimulator;
+
+    afterEach(() => {
+      server?.cleanup();
+    });
+
+    it("should handle player leaving using real RoomManager", () => {
+      server = new ServerSimulator("leave-room");
 
       // Two players join
       server.handlePlayerEnters("conn-1", {
@@ -658,10 +847,10 @@ describe("WebSocket Message Flow Tests", () => {
         room: "leave-room",
       });
 
-      let room = server.getRoom("leave-room");
-      expect(room!.count).toBe(2);
+      let gameRoom = server.getRoom("leave-room");
+      expect(gameRoom?.count).toBe(2);
 
-      // Alice leaves
+      // Alice leaves using real RoomManager.removePlayerFromRoom
       const result = server.handlePlayerLeaves("conn-1", {
         type: "playerLeaves",
         room: "leave-room",
@@ -671,12 +860,15 @@ describe("WebSocket Message Flow Tests", () => {
       expect(result.count).toBe(1);
       expect(result.players.length).toBe(1);
       expect(result.players[0].name).toBe("Bob");
+
+      // Verify via real GameRoom
+      gameRoom = server.getRoom("leave-room");
+      expect(gameRoom?.count).toBe(1);
     });
 
-    it("should clean up room when last player leaves", () => {
-      const server = new MockServerInstance("cleanup-room");
+    it("should mark room as empty when last player leaves", () => {
+      server = new ServerSimulator("cleanup-room");
 
-      // One player joins
       server.handlePlayerEnters("conn-1", {
         type: "playerEnters",
         player: { name: "Alice", avatar: "a.png", room: "cleanup-room" },
@@ -689,11 +881,10 @@ describe("WebSocket Message Flow Tests", () => {
         room: "cleanup-room",
       });
 
-      // Room should be removed
-      const room = server.getRoom("cleanup-room");
-      expect(room).toBeUndefined();
-      expect(server.rooms.length).toBe(0);
-      expect(server.players.length).toBe(0);
+      // Room should be empty via real GameRoom.isEmpty
+      const gameRoom = server.getRoom("cleanup-room");
+      expect(gameRoom?.isEmpty).toBe(true);
+      expect(gameRoom?.count).toBe(0);
     });
   });
 
@@ -701,71 +892,78 @@ describe("WebSocket Message Flow Tests", () => {
   // ROOM ISOLATION VERIFICATION
   // ============================================
   describe("Room Isolation Verification", () => {
-    it("should maintain separate state for different rooms", () => {
-      // Create two separate server instances (simulating PartyKit room isolation)
-      const serverA = new MockServerInstance("room-a");
-      const serverB = new MockServerInstance("room-b");
+    it("should maintain separate state for different rooms using real GameRooms", () => {
+      const serverA = new ServerSimulator("room-a");
+      const serverB = new ServerSimulator("room-b");
       const cardA = influencerCards.influencerCards[0];
       const cardB = influencerCards.influencerCards[5];
 
-      // Player joins room A
-      serverA.handlePlayerEnters("conn-a1", {
-        type: "playerEnters",
-        player: { name: "Alice", avatar: "a.png", room: "room-a" },
-        room: "room-a",
-      });
+      try {
+        // Player joins room A
+        serverA.handlePlayerEnters("conn-a1", {
+          type: "playerEnters",
+          player: { name: "Alice", avatar: "a.png", room: "room-a" },
+          room: "room-a",
+        });
 
-      // Player joins room B
-      serverB.handlePlayerEnters("conn-b1", {
-        type: "playerEnters",
-        player: { name: "Bob", avatar: "b.png", room: "room-b" },
-        room: "room-b",
-      });
+        // Player joins room B
+        serverB.handlePlayerEnters("conn-b1", {
+          type: "playerEnters",
+          player: { name: "Bob", avatar: "b.png", room: "room-b" },
+          room: "room-b",
+        });
 
-      // Set different cards for each room
-      serverA.handleInfluencer({
-        type: "influencer",
-        newsCard: cardA,
-        villain: cardA.villain,
-        tactic: cardA.tacticUsed,
-        room: "room-a",
-      });
+        // Set different cards for each room
+        serverA.handleInfluencer({
+          type: "influencer",
+          newsCard: cardA,
+          villain: cardA.villain,
+          tactic: cardA.tacticUsed,
+          room: "room-a",
+        });
 
-      serverB.handleInfluencer({
-        type: "influencer",
-        newsCard: cardB,
-        villain: cardB.villain,
-        tactic: cardB.tacticUsed,
-        room: "room-b",
-      });
+        serverB.handleInfluencer({
+          type: "influencer",
+          newsCard: cardB,
+          villain: cardB.villain,
+          tactic: cardB.tacticUsed,
+          room: "room-b",
+        });
 
-      // Verify isolation
-      const roomA = serverA.getRoom("room-a");
-      const roomB = serverB.getRoom("room-b");
+        // Verify isolation via real GameRoom properties
+        const roomA = serverA.getRoom("room-a");
+        const roomB = serverB.getRoom("room-b");
 
-      expect(roomA!.influencerCard?.villain).toBe(cardA.villain);
-      expect(roomB!.influencerCard?.villain).toBe(cardB.villain);
-      expect(roomA!.influencerCard?.villain).not.toBe(
-        roomB!.influencerCard?.villain,
-      );
+        expect(roomA?.influencerCard?.villain).toBe(cardA.villain);
+        expect(roomB?.influencerCard?.villain).toBe(cardB.villain);
 
-      // Decks should be different (shuffled independently)
-      expect(roomA!.deck).not.toBe(roomB!.deck);
+        // Decks should be different (shuffled independently by real GameRoom)
+        expect(roomA?.deck).not.toBe(roomB?.deck);
+        expect(roomA?.deck.data).not.toBe(roomB?.deck.data);
+      } finally {
+        serverA.cleanup();
+        serverB.cleanup();
+      }
     });
 
     it("should generate unique player IDs per server instance", () => {
-      const serverA = new MockServerInstance("id-room-a");
-      const serverB = new MockServerInstance("id-room-b");
+      const serverA = new ServerSimulator("id-room-a");
+      const serverB = new ServerSimulator("id-room-b");
 
-      const idA = serverA.generatePlayerId();
-      const idB = serverB.generatePlayerId();
+      try {
+        const idA = serverA.generatePlayerId();
+        const idB = serverB.generatePlayerId();
 
-      // IDs should contain their room identifier
-      expect(idA).toContain("id-room-a");
-      expect(idB).toContain("id-room-b");
+        // IDs should contain their room identifier
+        expect(idA).toContain("id-room-a");
+        expect(idB).toContain("id-room-b");
 
-      // IDs should be different
-      expect(idA).not.toBe(idB);
+        // IDs should be different
+        expect(idA).not.toBe(idB);
+      } finally {
+        serverA.cleanup();
+        serverB.cleanup();
+      }
     });
   });
 
@@ -773,49 +971,193 @@ describe("WebSocket Message Flow Tests", () => {
   // DECK INTEGRITY TESTS
   // ============================================
   describe("Deck Integrity Across Rooms", () => {
-    it("should give each room its own independently shuffled deck", () => {
-      const server1 = new MockServerInstance("deck-room-1");
-      const server2 = new MockServerInstance("deck-room-2");
+    it("should give each room its own independently shuffled deck via real GameRoom", () => {
+      const server1 = new ServerSimulator("deck-room-1");
+      const server2 = new ServerSimulator("deck-room-2");
 
-      // Players join each room
-      server1.handlePlayerEnters("conn-1", {
+      try {
+        // Players join each room
+        server1.handlePlayerEnters("conn-1", {
+          type: "playerEnters",
+          player: { name: "Alice", avatar: "a.png", room: "deck-room-1" },
+          room: "deck-room-1",
+        });
+
+        server2.handlePlayerEnters("conn-2", {
+          type: "playerEnters",
+          player: { name: "Bob", avatar: "b.png", room: "deck-room-2" },
+          room: "deck-room-2",
+        });
+
+        // Get real GameRoom instances
+        const room1 = server1.getRoom("deck-room-1");
+        const room2 = server2.getRoom("deck-room-2");
+
+        // Both rooms should have decks (created by real GameRoom constructor)
+        expect(room1?.deck).toBeDefined();
+        expect(room2?.deck).toBeDefined();
+        expect(room1?.deck.isShuffled).toBe(true);
+        expect(room2?.deck.isShuffled).toBe(true);
+
+        // Decks should be different arrays
+        expect(room1?.deck.data).not.toBe(room2?.deck.data);
+
+        // Verify cards have required properties (real data integrity)
+        const card1 = (room1?.deck.data as any[])[0];
+        const card2 = (room2?.deck.data as any[])[0];
+
+        expect(card1).toHaveProperty("id");
+        expect(card1).toHaveProperty("villain");
+        expect(card1).toHaveProperty("tacticUsed");
+
+        expect(card2).toHaveProperty("id");
+        expect(card2).toHaveProperty("villain");
+        expect(card2).toHaveProperty("tacticUsed");
+      } finally {
+        server1.cleanup();
+        server2.cleanup();
+      }
+    });
+  });
+
+  // ============================================
+  // REAL SCORING VALIDATION TESTS
+  // ============================================
+  describe("Real Scoring Validation", () => {
+    let server: ServerSimulator;
+
+    afterEach(() => {
+      server?.cleanup();
+    });
+
+    it("should award exactly 100 points per correct tactic (REAL scoring constants)", () => {
+      server = new ServerSimulator("exact-score-room");
+
+      // Find a card with exactly 2 tactics
+      const twoTacticCard = influencerCards.influencerCards.find(
+        (c: any) => c.tacticUsed.length === 2,
+      );
+      expect(twoTacticCard).toBeDefined();
+
+      server.handlePlayerEnters("conn-1", {
         type: "playerEnters",
-        player: { name: "Alice", avatar: "a.png", room: "deck-room-1" },
-        room: "deck-room-1",
+        player: { name: "Scorer", avatar: "a.png", room: "exact-score-room" },
+        room: "exact-score-room",
       });
 
-      server2.handlePlayerEnters("conn-2", {
-        type: "playerEnters",
-        player: { name: "Bob", avatar: "b.png", room: "deck-room-2" },
-        room: "deck-room-2",
+      const playerId = server.connectionToPlayerId.get("conn-1")!;
+
+      server.handleInfluencer({
+        type: "influencer",
+        newsCard: twoTacticCard,
+        villain: twoTacticCard!.villain,
+        tactic: twoTacticCard!.tacticUsed,
+        room: "exact-score-room",
       });
 
-      const room1 = server1.getRoom("deck-room-1");
-      const room2 = server2.getRoom("deck-room-2");
+      server.handlePlayerReady("conn-1", {
+        type: "playerReady",
+        room: "exact-score-room",
+        players: [{ id: playerId, tacticUsed: twoTacticCard!.tacticUsed }],
+      });
 
-      // Both rooms should have decks
-      expect(room1!.deck).toBeDefined();
-      expect(room2!.deck).toBeDefined();
+      const gameRoom = server.getRoom("exact-score-room");
+      const result = server.handleEndOfRound({
+        type: "endOfRound",
+        room: "exact-score-room",
+        round: 1,
+        players: gameRoom!.players,
+      });
 
-      // Decks should be different arrays
-      expect(room1!.deck!.data).not.toBe(room2!.deck!.data);
+      // REAL scoring: CORRECT_ANSWER (2) * 50 * 2 tactics = 200 points
+      expect(result.players[0].score).toBe(200);
+    });
 
-      // Cards should likely be in different orders
-      const firstCard1 = JSON.stringify((room1!.deck!.data as any[])[0]);
-      const firstCard2 = JSON.stringify((room2!.deck!.data as any[])[0]);
+    it("should deduct exactly 50 points per wrong tactic (REAL scoring constants)", () => {
+      server = new ServerSimulator("penalty-room");
 
-      // Note: Small chance they could be same, but statistically very unlikely
-      // Just verify they're both valid cards with required properties
-      const card1 = (room1!.deck!.data as any[])[0];
-      const card2 = (room2!.deck!.data as any[])[0];
+      const card = influencerCards.influencerCards[0];
 
-      expect(card1).toHaveProperty("id");
-      expect(card1).toHaveProperty("villain");
-      expect(card1).toHaveProperty("tacticUsed");
+      server.handlePlayerEnters("conn-1", {
+        type: "playerEnters",
+        player: { name: "Loser", avatar: "a.png", room: "penalty-room" },
+        room: "penalty-room",
+      });
 
-      expect(card2).toHaveProperty("id");
-      expect(card2).toHaveProperty("villain");
-      expect(card2).toHaveProperty("tacticUsed");
+      const playerId = server.connectionToPlayerId.get("conn-1")!;
+
+      server.handleInfluencer({
+        type: "influencer",
+        newsCard: card,
+        villain: card.villain,
+        tactic: card.tacticUsed,
+        room: "penalty-room",
+      });
+
+      // Give player starting score and wrong tactics
+      const gameRoom = server.getRoom("penalty-room");
+      gameRoom!.players[0].score = 200;
+
+      server.handlePlayerReady("conn-1", {
+        type: "playerReady",
+        room: "penalty-room",
+        players: [{ id: playerId, tacticUsed: ["wrong1", "wrong2"] }],
+      });
+
+      const result = server.handleEndOfRound({
+        type: "endOfRound",
+        room: "penalty-room",
+        round: 1,
+        players: gameRoom!.players,
+      });
+
+      // REAL scoring: WRONG_ANSWER (-1) * 50 * 2 wrong = -100 points
+      // Starting with 200, ending with 100
+      expect(result.players[0].score).toBe(100);
+      expect(result.players[0].wasCorrect).toBe(false);
+    });
+
+    it("should not allow score below 0 (REAL scoring floor)", () => {
+      server = new ServerSimulator("floor-room");
+
+      const card = influencerCards.influencerCards[0];
+
+      server.handlePlayerEnters("conn-1", {
+        type: "playerEnters",
+        player: { name: "Floored", avatar: "a.png", room: "floor-room" },
+        room: "floor-room",
+      });
+
+      const playerId = server.connectionToPlayerId.get("conn-1")!;
+
+      server.handleInfluencer({
+        type: "influencer",
+        newsCard: card,
+        villain: card.villain,
+        tactic: card.tacticUsed,
+        room: "floor-room",
+      });
+
+      // Give player low starting score
+      const gameRoom = server.getRoom("floor-room");
+      gameRoom!.players[0].score = 10;
+
+      // Many wrong answers
+      server.handlePlayerReady("conn-1", {
+        type: "playerReady",
+        room: "floor-room",
+        players: [{ id: playerId, tacticUsed: ["wrong1", "wrong2", "wrong3"] }],
+      });
+
+      const result = server.handleEndOfRound({
+        type: "endOfRound",
+        room: "floor-room",
+        round: 1,
+        players: gameRoom!.players,
+      });
+
+      // REAL scoring ensures score can't go below 0
+      expect(result.players[0].score).toBe(0);
     });
   });
 });

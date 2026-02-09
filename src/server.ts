@@ -15,6 +15,8 @@ import {
   resetPlayerForNextRound,
 } from "./components/Scoring/scoring";
 import { parseContent } from "./utils/utils";
+import { GameRoom } from "./components/Room/GameRoom";
+import { RoomManager } from "./components/RoomManager";
 
 export default class Server implements Party.Server {
   constructor(readonly room: Party.Room) {
@@ -30,6 +32,84 @@ export default class Server implements Party.Server {
     return `player_${Date.now()}_${this.room.id}_${this.playerIdCounter}_${Math.random().toString(36).substring(2, 8)}`;
   }
 
+  // Use RoomManager for room lifecycle management (same code as tests)
+  private roomManager = new RoomManager({
+    deletionDelayMs: 30000,
+    onRoomDeleted: (roomName, availableRooms) => {
+      // Remove legacy room from list
+      this.rooms = this.rooms.filter((r) => r.name !== roomName);
+
+      // Reset room-specific tracking data
+      this.scoredRounds.delete(roomName);
+      this.roomRounds.delete(roomName);
+
+      // Broadcast room deletion to all clients
+      this.room.broadcast(
+        JSON.stringify({
+          type: "roomDeleted",
+          roomName: roomName,
+          availableRooms: availableRooms,
+        }),
+      );
+
+      // Reset instance-level game state for fresh start
+      this.currentRound = 1;
+      this.currentNewsCard = null;
+      this.currentTheme = "all";
+      this.influencerCard = { villain: "biost", tactic: [] };
+      this.shuffledDeck = {
+        type: "shuffledDeck",
+        data: [],
+        isShuffled: false,
+      };
+      this.deckReady = [];
+      this.playedCards = [];
+      this.tacticsUsed = [];
+      this.wasScored = false;
+    },
+    onRoomCreated: (roomName, availableRooms) => {
+      // Broadcast to all connected clients that a new room is available
+      this.room.broadcast(
+        JSON.stringify({
+          type: "roomCreated",
+          roomName: roomName,
+          availableRooms: availableRooms,
+        }),
+      );
+    },
+  });
+
+  // Expose gameRooms map for backward compatibility
+  get gameRooms(): Map<string, GameRoom> {
+    return this.roomManager.gameRooms;
+  }
+
+  // Expose roomDeletionTimers for backward compatibility
+  get roomDeletionTimers(): Map<string, ReturnType<typeof setTimeout>> {
+    return this.roomManager.roomDeletionTimers;
+  }
+
+  // Delegate to RoomManager (same code that tests use)
+  getOrCreateGameRoom(roomName: string): GameRoom {
+    return this.roomManager.getOrCreateGameRoom(roomName);
+  }
+
+  // Delegate to RoomManager (same code that tests use)
+  scheduleRoomDeletion(roomName: string): void {
+    this.roomManager.scheduleRoomDeletion(roomName);
+  }
+
+  // Delegate to RoomManager (same code that tests use)
+  cancelRoomDeletionTimer(roomName: string): void {
+    this.roomManager.cancelRoomDeletionTimer(roomName);
+  }
+
+  // Delegate to RoomManager (same code that tests use)
+  deleteRoom(roomName: string): boolean {
+    return this.roomManager.deleteRoom(roomName);
+  }
+
+  // Legacy properties maintained for backward compatibility
   players: Player[] = [];
   lobbyPlayers: Player[] = [];
   lobby: Room = { name: "lobby", players: [], count: 0 };
@@ -70,7 +150,14 @@ export default class Server implements Party.Server {
   //update this to put everyone in a lobbyRoom
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
     if (this.room.id === "lobby") {
-      // Lobby-specific logic here
+      // Send current list of available rooms to the connecting client
+      const availableRooms = Array.from(this.gameRooms.keys());
+      conn.send(
+        JSON.stringify({
+          type: "availableRooms",
+          rooms: availableRooms,
+        }),
+      );
     } else {
       if (this.players.length >= 5) {
         conn.send(
@@ -114,6 +201,29 @@ export default class Server implements Party.Server {
           // Store mapping
           this.connectionToPlayerId.set(sender.id, newPlayerId);
           sender.send(JSON.stringify({ type: "playerId", id: newPlayerId }));
+          break;
+        case "createRoom":
+          // Create a new game room using RoomManager (same code as tests)
+          const newRoomName = parsedContent.roomName;
+          if (newRoomName && !this.roomManager.hasRoom(newRoomName)) {
+            // Create the GameRoom instance via RoomManager
+            this.roomManager.createRoom(newRoomName);
+
+            // Also add to legacy rooms array for backward compatibility
+            if (!this.rooms.find((r) => r.name === newRoomName)) {
+              this.rooms.push({ name: newRoomName, count: 0, players: [] });
+            }
+          }
+          break;
+        case "getAvailableRooms":
+          // Return list of all available rooms using RoomManager
+          const allRooms = this.roomManager.getAvailableRooms();
+          sender.send(
+            JSON.stringify({
+              type: "availableRooms",
+              rooms: allRooms,
+            }),
+          );
           break;
         case "enteredLobby":
           const roomCounts: Record<string, Room> = {};
@@ -170,7 +280,10 @@ export default class Server implements Party.Server {
               break;
             }
 
-            // Find or create the room first
+            // Get or create the GameRoom instance for proper isolation
+            const gameRoom = this.getOrCreateGameRoom(parsedContent.room);
+
+            // Also maintain legacy room for backward compatibility
             let room = this.rooms.find((r) => r.name === parsedContent.room);
             if (!room) {
               room = { name: parsedContent.room, count: 0, players: [] };
@@ -180,9 +293,7 @@ export default class Server implements Party.Server {
             // Check if client-provided playerId already exists in this room
             // If so, generate a new unique ID to prevent duplicate player issues
             let clientPlayerId = parsedContent.player.id;
-            const existingPlayerWithSameId = room.players.find(
-              (p) => p.id === clientPlayerId,
-            );
+            const existingPlayerWithSameId = gameRoom.getPlayer(clientPlayerId);
 
             if (existingPlayerWithSameId && clientPlayerId) {
               // Generate a new unique ID for this player
@@ -203,46 +314,22 @@ export default class Server implements Party.Server {
             // Store mapping from connection ID to player ID
             this.connectionToPlayerId.set(sender.id, parsedContent.player.id);
 
-            room.players.push(parsedContent.player);
-            room.count = room.players.length;
+            // Add player to GameRoom (handles isolation)
+            gameRoom.addPlayer(parsedContent.player);
+
+            // Sync legacy structures
+            room.players = gameRoom.players;
+            room.count = gameRoom.count;
+            room.deck = gameRoom.deck;
+            room.currentRound = gameRoom.currentRound;
+            room.currentTheme = gameRoom.currentTheme;
+            room.currentNewsCard = gameRoom.currentNewsCard;
+            room.influencerCard = gameRoom.influencerCard;
 
             this.players.push(parsedContent.player);
 
-            if (!room.deck) {
-              const deckData = shuffleInfluencerDeck(
-                startingDeck.influencerCards,
-              );
-              room.deck = {
-                type: "shuffledDeck",
-                data: deckData,
-                isShuffled: true,
-              };
-            }
-
-            // Initialize room-specific state if not set
-            if (room.currentRound === undefined) {
-              room.currentRound = 1;
-            }
-            if (room.currentTheme === undefined) {
-              room.currentTheme = "all";
-            }
-            if (room.influencerCard === undefined) {
-              room.influencerCard = { villain: "biost", tactic: [] };
-            }
-
-            // Broadcast updated room data to all players in the room
-            // Include current round and card index so all players sync to same card
-            const roomUpdateMessage = {
-              type: "roomUpdate",
-              room: room.name,
-              count: room.count,
-              players: room.players,
-              deck: room.deck,
-              currentRound: room.currentRound,
-              cardIndex: (room.currentRound || 1) - 1, // card index corresponds to round
-              newsCard: room.currentNewsCard,
-              themeStyle: room.currentTheme,
-            };
+            // Broadcast updated room data from the isolated GameRoom
+            const roomUpdateMessage = gameRoom.toRoomUpdate();
 
             this.room.broadcast(JSON.stringify(roomUpdateMessage));
           } catch (error) {
@@ -258,7 +345,10 @@ export default class Server implements Party.Server {
           break;
 
         case "influencer":
-          // Find the room to store room-specific state
+          // Get the GameRoom for proper isolation
+          const influencerGameRoom = this.gameRooms.get(parsedContent.room);
+
+          // Find the legacy room to store room-specific state
           const influencerRoom =
             this.rooms.find((r) => r.name === parsedContent.room) ||
             this.rooms[0]; // Fall back to first room if room name not provided
@@ -270,7 +360,17 @@ export default class Server implements Party.Server {
               parsedContent.tactic || parsedContent.newsCard?.tacticUsed || [],
           };
 
-          // Store in both room-specific and instance-level for backward compatibility
+          // Store in GameRoom (isolated), legacy room, and instance-level for backward compatibility
+          if (influencerGameRoom) {
+            influencerGameRoom.influencerCard = newInfluencerCard;
+            if (parsedContent.newsCard) {
+              influencerGameRoom.currentNewsCard = parsedContent.newsCard;
+            }
+            if (parsedContent.villain) {
+              influencerGameRoom.currentTheme = parsedContent.villain;
+            }
+          }
+
           this.influencerCard = newInfluencerCard;
           if (influencerRoom) {
             influencerRoom.influencerCard = newInfluencerCard;
@@ -304,26 +404,27 @@ export default class Server implements Party.Server {
           );
           const tacticUsedFromClient = clientReadyPlayer?.tacticUsed || [];
 
-          // Find the specific room this player is in
+          // Get the GameRoom for proper isolation
+          const readyGameRoom = this.gameRooms.get(parsedContent.room);
+
+          // Find the specific legacy room this player is in
           const readyRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
 
-          if (readyRoom) {
-            // Update ONLY the player who sent the ready message
-            // Do NOT merge client player data - only update isReady and tacticUsed
-            readyRoom.players = readyRoom.players.map((player) => {
-              if (player.id === readyPlayerId) {
-                return {
-                  ...player,
-                  isReady: true,
-                  tacticUsed: tacticUsedFromClient,
-                };
-              }
-              return player;
+          if (readyGameRoom) {
+            // Update player in GameRoom
+            readyGameRoom.updatePlayer(readyPlayerId, {
+              isReady: true,
+              tacticUsed: tacticUsedFromClient,
             });
 
-            // Also update global players list - same approach
+            // Sync legacy room
+            if (readyRoom) {
+              readyRoom.players = readyGameRoom.players;
+            }
+
+            // Also update global players list
             this.players = this.players.map((player) => {
               if (player.id === readyPlayerId) {
                 return {
@@ -340,7 +441,7 @@ export default class Server implements Party.Server {
               JSON.stringify({
                 type: "playerReady",
                 room: parsedContent.room,
-                roomData: readyRoom.players,
+                roomData: readyGameRoom.players,
                 sender: sender.id,
               }),
             );
@@ -351,25 +452,27 @@ export default class Server implements Party.Server {
           const notReadyPlayerId =
             this.connectionToPlayerId.get(sender.id) || sender.id;
 
-          // Find the specific room this player is in
+          // Get the GameRoom for proper isolation
+          const notReadyGameRoom = this.gameRooms.get(parsedContent.room);
+
+          // Find the specific legacy room this player is in
           const notReadyRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
-          if (notReadyRoom) {
-            // Update ONLY the player who clicked not ready
-            // Do NOT merge client player data - only update isReady and clear tacticUsed
-            notReadyRoom.players = notReadyRoom.players.map((player) => {
-              if (player.id === notReadyPlayerId) {
-                return {
-                  ...player,
-                  isReady: false,
-                  tacticUsed: [],
-                };
-              }
-              return player;
+
+          if (notReadyGameRoom) {
+            // Update player in GameRoom
+            notReadyGameRoom.updatePlayer(notReadyPlayerId, {
+              isReady: false,
+              tacticUsed: [],
             });
 
-            // Also update global players list - same approach
+            // Sync legacy room
+            if (notReadyRoom) {
+              notReadyRoom.players = notReadyGameRoom.players;
+            }
+
+            // Also update global players list
             this.players = this.players.map((player) => {
               if (player.id === notReadyPlayerId) {
                 return {
@@ -389,7 +492,7 @@ export default class Server implements Party.Server {
               JSON.stringify({
                 type: "playerReady",
                 room: parsedContent.room,
-                roomData: notReadyRoom.players,
+                roomData: notReadyGameRoom.players,
                 sender: sender.id,
               }),
             );
@@ -400,58 +503,30 @@ export default class Server implements Party.Server {
           const leavingPlayerId =
             this.connectionToPlayerId.get(sender.id) || sender.id;
 
-          // Find the room this player is leaving
+          // Get the GameRoom for proper isolation
+          const leavingGameRoom = this.gameRooms.get(parsedContent.room);
+
+          // Find the legacy room this player is leaving
           const leavingRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
 
-          if (leavingRoom) {
-            // Remove player from room
-            leavingRoom.players = leavingRoom.players.filter(
-              (player) => player.id !== leavingPlayerId,
-            );
-            leavingRoom.count = leavingRoom.players.length;
+          if (leavingGameRoom) {
+            // Remove player from GameRoom
+            leavingGameRoom.removePlayer(leavingPlayerId);
 
-            // Broadcast updated room state using room-specific values
-            this.room.broadcast(
-              JSON.stringify({
-                type: "roomUpdate",
-                room: leavingRoom.name,
-                count: leavingRoom.count,
-                players: leavingRoom.players,
-                deck: leavingRoom.deck,
-                currentRound: leavingRoom.currentRound || 1,
-                cardIndex: (leavingRoom.currentRound || 1) - 1,
-                newsCard: leavingRoom.currentNewsCard,
-                themeStyle: leavingRoom.currentTheme || "all",
-              }),
-            );
+            // Sync legacy room
+            if (leavingRoom) {
+              leavingRoom.players = leavingGameRoom.players;
+              leavingRoom.count = leavingGameRoom.count;
+            }
 
-            // If room is now empty, reset it
-            if (leavingRoom.count === 0) {
-              // Remove room from list
-              this.rooms = this.rooms.filter(
-                (r) => r.name !== leavingRoom.name,
-              );
+            // Broadcast updated room state using GameRoom values
+            this.room.broadcast(JSON.stringify(leavingGameRoom.toRoomUpdate()));
 
-              // Reset room-specific tracking data
-              this.scoredRounds.delete(leavingRoom.name);
-              this.roomRounds.delete(leavingRoom.name);
-
-              // Reset instance-level game state for fresh start
-              this.currentRound = 1;
-              this.currentNewsCard = null;
-              this.currentTheme = "all";
-              this.influencerCard = { villain: "biost", tactic: [] };
-              this.shuffledDeck = {
-                type: "shuffledDeck",
-                data: [],
-                isShuffled: false,
-              };
-              this.deckReady = [];
-              this.playedCards = [];
-              this.tacticsUsed = [];
-              this.wasScored = false;
+            // If room is now empty, schedule deletion after 30 seconds
+            if (leavingGameRoom.isEmpty) {
+              this.scheduleRoomDeletion(parsedContent.room);
             }
           }
 
@@ -463,6 +538,33 @@ export default class Server implements Party.Server {
           this.connectionToPlayerId.delete(sender.id);
 
           break;
+        case "endGame":
+          // Handle end game - immediately delete the room when game ends
+          const endGameRoomName = parsedContent.room;
+          const endGameRoom = this.gameRooms.get(endGameRoomName);
+
+          if (endGameRoom) {
+            // Mark the game as ended
+            endGameRoom.wasScored = true;
+
+            // Broadcast game ended to all players in the room
+            this.room.broadcast(
+              JSON.stringify({
+                type: "gameEnded",
+                room: endGameRoomName,
+              }),
+            );
+
+            // If room is empty after end game, delete immediately
+            if (endGameRoom.isEmpty) {
+              this.deleteRoom(endGameRoomName);
+            } else {
+              // Otherwise, schedule deletion when last player leaves
+              // The next playerLeaves will trigger immediate deletion
+              endGameRoom.wasScored = true;
+            }
+          }
+          break;
         case "allReady":
           const allReady = this.players.every((player) => player.isReady);
           this.room.broadcast(
@@ -470,81 +572,100 @@ export default class Server implements Party.Server {
           );
           break;
         case "startingDeck":
-          // Find or create the room
+          // Get or create the GameRoom
+          const deckGameRoom = this.getOrCreateGameRoom(parsedContent.room);
+
+          // Find or create the legacy room
           let currentRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
 
-          if (currentRoom && !currentRoom.deck) {
-            // Shuffle deck for this specific room
-            const deckData = shuffleInfluencerDeck(parsedContent.data);
-            currentRoom.deck = {
-              type: "shuffledDeck",
-              data: deckData,
-              isShuffled: true,
-            };
-            this.rooms = this.rooms.map((room) =>
-              room.name === currentRoom.name ? currentRoom : room,
-            );
-            this.room.broadcast(JSON.stringify(currentRoom.deck));
-          } else if (currentRoom?.deck) {
-            // Room already has a deck, broadcast existing deck
-            this.room.broadcast(JSON.stringify(currentRoom.deck));
-          } else {
-            console.error(`Room ${parsedContent.room} not found.`);
+          // GameRoom always has a deck (shuffled on creation)
+          // Broadcast the GameRoom's deck
+          this.room.broadcast(JSON.stringify(deckGameRoom.deck));
+
+          // Sync to legacy room
+          if (currentRoom) {
+            currentRoom.deck = deckGameRoom.deck;
           }
 
           break;
         case "endOfRound":
-          // Identify the room this round belongs to so we only score that room
+          // Get the GameRoom for proper isolation
+          const roundGameRoom = this.gameRooms.get(parsedContent.room);
+
+          // Also get legacy room for backward compatibility
           const roundRoom = this.rooms.find(
             (r) => r.name === parsedContent.room,
           );
 
           const playersToScore = Array.isArray(parsedContent.players)
             ? parsedContent.players
-            : roundRoom?.players;
+            : roundGameRoom?.players || roundRoom?.players;
 
-          if (roundRoom && Array.isArray(playersToScore)) {
-            // Prevent duplicate scoring for the same round
-            const roomKey = roundRoom.name;
-            // Derive round number robustly: use provided round, else last+1, else 1
-            const lastRound = this.roomRounds.get(roomKey) ?? 0;
+          if ((roundGameRoom || roundRoom) && Array.isArray(playersToScore)) {
+            // Use GameRoom if available, fall back to legacy room
+            const roomKey =
+              roundGameRoom?.name || roundRoom?.name || parsedContent.room;
+
+            // Derive round number robustly: use provided round, else GameRoom round, else last+1, else 1
+            const lastRound =
+              roundGameRoom?.lastScoredRound ||
+              this.roomRounds.get(roomKey) ||
+              0;
             const roundNumber =
               typeof parsedContent.round === "number" && parsedContent.round > 0
                 ? parsedContent.round
                 : lastRound + 1 || 1;
 
-            if (!this.scoredRounds.has(roomKey)) {
-              this.scoredRounds.set(roomKey, new Set());
-            }
-            const scoredRoundsForRoom = this.scoredRounds.get(roomKey)!;
+            // Check if round already scored using GameRoom or legacy tracking
+            const alreadyScored = roundGameRoom
+              ? roundGameRoom.isRoundScored(roundNumber)
+              : this.scoredRounds.get(roomKey)?.has(roundNumber);
 
-            if (scoredRoundsForRoom.has(roundNumber)) {
+            if (alreadyScored) {
               break;
             }
 
-            // Mark this round as scored
-            scoredRoundsForRoom.add(roundNumber);
+            // Mark this round as scored in both GameRoom and legacy tracking
+            if (roundGameRoom) {
+              roundGameRoom.markRoundScored(roundNumber);
+            }
+            if (!this.scoredRounds.has(roomKey)) {
+              this.scoredRounds.set(roomKey, new Set());
+            }
+            this.scoredRounds.get(roomKey)!.add(roundNumber);
 
-            // Use room-specific influencer card if available, fall back to instance-level
+            // Use GameRoom's influencer card if available, fall back to legacy room, then instance-level
             const influencerCardForScoring =
-              roundRoom.influencerCard || this.influencerCard;
+              roundGameRoom?.influencerCard ||
+              roundRoom?.influencerCard ||
+              this.influencerCard;
+
+            // Get the current room players from GameRoom or legacy
+            const roomPlayers =
+              roundGameRoom?.players || roundRoom?.players || [];
 
             const updatedPlayers = calculateScore(
               playersToScore,
-              roundRoom.players,
+              roomPlayers,
               influencerCardForScoring,
               roundNumber,
             );
 
-            // Update the room's players with the calculated scores
-            roundRoom.players = updatedPlayers;
+            // Update the GameRoom's players with the calculated scores
+            if (roundGameRoom) {
+              roundGameRoom.players = updatedPlayers;
+            }
+            // Also update legacy room
+            if (roundRoom) {
+              roundRoom.players = updatedPlayers;
+            }
 
-            if (areAllScoresUpdated(roundRoom.players)) {
+            if (areAllScoresUpdated(updatedPlayers)) {
               // Persist back into global players list as well
               this.players = this.players.map((p) => {
-                const updated = roundRoom.players.find((rp) => rp.id === p.id);
+                const updated = updatedPlayers.find((rp) => rp.id === p.id);
                 return updated ? { ...p, ...updated } : p;
               });
 
@@ -554,34 +675,45 @@ export default class Server implements Party.Server {
               this.room.broadcast(
                 JSON.stringify({
                   type: "scoreUpdate",
-                  room: roundRoom.name,
-                  players: roundRoom.players,
+                  room: roomKey,
+                  players: updatedPlayers,
                 }),
               );
 
               // Update last scored round for this room and advance to next round
               this.roomRounds.set(roomKey, roundNumber);
 
-              // Advance the room's current round to the next round
-              // This ensures new players joining will sync to the correct round
-              roundRoom.currentRound = roundNumber + 1;
-              // Also update instance-level for backward compatibility
-              this.currentRound = roundNumber + 1;
+              // Advance the room's current round to the next round using GameRoom
+              if (roundGameRoom) {
+                roundGameRoom.currentRound = roundNumber + 1;
+                // Prepare players for the next round
+                roundGameRoom.players = roundGameRoom.players.map((p) => ({
+                  ...p,
+                  tacticUsed: [],
+                  isReady: false,
+                  scoreUpdated: false,
+                  streakUpdated: false,
+                }));
+              }
 
-              // Prepare players for the next round without touching score/streak
-              // Clear tactics and readiness so next round scoring only considers fresh choices
-              roundRoom.players = roundRoom.players.map((p) => ({
-                ...p,
-                tacticUsed: [],
-                isReady: false,
-                scoreUpdated: false,
-                streakUpdated: false,
-                // keep: score, streak, hasStreak, wasCorrect (UI reads from snapshot on client)
-              }));
+              // Also update legacy room
+              if (roundRoom) {
+                roundRoom.currentRound = roundNumber + 1;
+                roundRoom.players = roundRoom.players.map((p) => ({
+                  ...p,
+                  tacticUsed: [],
+                  isReady: false,
+                  scoreUpdated: false,
+                  streakUpdated: false,
+                }));
+              }
+
+              // Update instance-level for backward compatibility
+              this.currentRound = roundNumber + 1;
             } else {
               console.error(
                 "Not all players have their scores updated for room",
-                roundRoom.name,
+                roomKey,
               );
             }
           } else {
@@ -616,12 +748,39 @@ export default class Server implements Party.Server {
       }),
     );
 
-    // Find room using the mapped player ID
+    // Find GameRoom using the mapped player ID
+    let foundGameRoom: GameRoom | undefined;
+    for (const [, gameRoom] of this.gameRooms) {
+      if (gameRoom.getPlayer(playerId)) {
+        foundGameRoom = gameRoom;
+        break;
+      }
+    }
+
+    // Also find legacy room for backward compatibility
     const room = this.rooms.find((r) =>
       r.players.some((player) => player.id === playerId),
     );
 
-    if (room) {
+    if (foundGameRoom) {
+      // Remove player from GameRoom
+      foundGameRoom.removePlayer(playerId);
+
+      // Sync to legacy room
+      if (room) {
+        room.players = foundGameRoom.players;
+        room.count = foundGameRoom.count;
+      }
+
+      // Broadcast updated room state from GameRoom
+      this.room.broadcast(JSON.stringify(foundGameRoom.toRoomUpdate()));
+
+      // If the room is empty, schedule deletion after 30 seconds
+      if (foundGameRoom.isEmpty) {
+        this.scheduleRoomDeletion(foundGameRoom.name);
+      }
+    } else if (room) {
+      // Fallback to legacy room handling
       room.players = room.players.filter((player) => player.id !== playerId);
       room.count = room.players.length;
 
@@ -639,29 +798,9 @@ export default class Server implements Party.Server {
         }),
       );
 
-      // If the room is empty, reset it to initial state
+      // If the room is empty, schedule deletion after 30 seconds
       if (room.count === 0) {
-        // Remove room from list
-        this.rooms = this.rooms.filter((r) => r.name !== room.name);
-
-        // Reset room-specific tracking data
-        this.scoredRounds.delete(room.name);
-        this.roomRounds.delete(room.name);
-
-        // Reset instance-level game state for fresh start
-        this.currentRound = 1;
-        this.currentNewsCard = null;
-        this.currentTheme = "all";
-        this.influencerCard = { villain: "biost", tactic: [] };
-        this.shuffledDeck = {
-          type: "shuffledDeck",
-          data: [],
-          isShuffled: false,
-        };
-        this.deckReady = [];
-        this.playedCards = [];
-        this.tacticsUsed = [];
-        this.wasScored = false;
+        this.scheduleRoomDeletion(room.name);
       }
     }
 
@@ -678,13 +817,95 @@ export default class Server implements Party.Server {
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
         },
       });
     }
 
+    // Handle POST for creating rooms
+    if (request.method === "POST") {
+      try {
+        const body = (await request.json()) as { roomName?: string };
+        const roomName = body.roomName;
+
+        if (roomName && !this.gameRooms.has(roomName)) {
+          // Create the GameRoom instance
+          this.getOrCreateGameRoom(roomName);
+
+          // Also add to legacy rooms array
+          if (!this.rooms.find((r) => r.name === roomName)) {
+            this.rooms.push({ name: roomName, count: 0, players: [] });
+          }
+
+          // Broadcast to all connected clients
+          const availableRooms = Array.from(this.gameRooms.keys());
+          this.room.broadcast(
+            JSON.stringify({
+              type: "roomCreated",
+              roomName: roomName,
+              availableRooms: availableRooms,
+            }),
+          );
+
+          return new Response(
+            JSON.stringify({ success: true, roomName, availableRooms }),
+            {
+              status: 201,
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+              },
+            },
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ error: "Room already exists or invalid name" }),
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
+          },
+        );
+      } catch (error) {
+        return new Response(JSON.stringify({ error: "Invalid request body" }), {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      }
+    }
+
     if (request.method === "GET") {
+      // Check if this is a request for available rooms (lobby endpoint)
+      const url = new URL(request.url);
+      if (
+        url.searchParams.get("availableRooms") === "true" ||
+        this.room.id === "lobby"
+      ) {
+        // Return list of all available rooms with their player counts
+        const availableRooms = Array.from(this.gameRooms.entries()).map(
+          ([name, gameRoom]) => ({
+            name,
+            count: gameRoom.count,
+            players: gameRoom.players,
+          }),
+        );
+
+        return new Response(JSON.stringify({ rooms: availableRooms }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      }
+
       // Return current room state (players in this room)
       const roomData = {
         room: this.room.id,
