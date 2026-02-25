@@ -33,6 +33,23 @@ export default class Server implements Party.Server {
   }
 
   // Use RoomManager for room lifecycle management (same code as tests)
+  // Helper to notify the lobby server about room lifecycle changes
+  private notifyLobby(action: string, roomName: string): void {
+    if (this.room.id === "lobby") return;
+    try {
+      const lobbyStub = this.room.context.parties.main.get("lobby");
+      lobbyStub
+        .fetch(`/?${action}=${encodeURIComponent(roomName)}`, {
+          method: "POST",
+        })
+        .catch((err) =>
+          console.error(`[notifyLobby] Failed ${action} for ${roomName}:`, err),
+        );
+    } catch (err) {
+      console.error(`[notifyLobby] Error ${action} for ${roomName}:`, err);
+    }
+  }
+
   private roomManager = new RoomManager({
     deletionDelayMs: 30000,
     onRoomDeleted: (roomName, availableRooms) => {
@@ -43,7 +60,7 @@ export default class Server implements Party.Server {
       this.scoredRounds.delete(roomName);
       this.roomRounds.delete(roomName);
 
-      // Broadcast room deletion to all clients
+      // Broadcast room deletion to all clients in this room (if any still connected)
       this.room.broadcast(
         JSON.stringify({
           type: "roomDeleted",
@@ -51,6 +68,9 @@ export default class Server implements Party.Server {
           availableRooms: availableRooms,
         }),
       );
+
+      // Notify the lobby server so it removes the room from its registry
+      this.notifyLobby("notifyRoomDeleted", roomName);
 
       // Reset instance-level game state for fresh start
       this.currentRound = 1;
@@ -257,17 +277,6 @@ export default class Server implements Party.Server {
           break;
         case "playerEnters":
           try {
-            this.room.broadcast(
-              JSON.stringify({
-                type: "announcement",
-                text: `Player joined: ${
-                  parsedContent.player?.name || "Unknown"
-                }`,
-              }),
-              [sender.id],
-            );
-            sender.send(JSON.stringify({ type: "playerId", id: sender.id }));
-
             // Ensure player object exists and has required fields
             if (!parsedContent.player) {
               console.error("Invalid playerEnters: missing player object");
@@ -282,6 +291,81 @@ export default class Server implements Party.Server {
 
             // Get or create the GameRoom instance for proper isolation
             const gameRoom = this.getOrCreateGameRoom(parsedContent.room);
+
+            // --- Server-side join guards ---
+
+            // Reject if room is full
+            if (gameRoom.isFull) {
+              sender.send(
+                JSON.stringify({
+                  type: "joinRejected",
+                  reason: "full",
+                  message: "This room is full (max 5 players).",
+                  room: parsedContent.room,
+                }),
+              );
+              break;
+            }
+
+            // Reject if game is already in progress (unless reconnecting)
+            if (gameRoom.isInProgress) {
+              const playerName = parsedContent.player?.name;
+              if (!playerName || !gameRoom.wasPlayerInRoom(playerName)) {
+                sender.send(
+                  JSON.stringify({
+                    type: "joinRejected",
+                    reason: "inProgress",
+                    message: "A game is already in progress in this room.",
+                    room: parsedContent.room,
+                  }),
+                );
+                break;
+              }
+              // Player was previously in this room — allow reconnection
+            }
+
+            // Reject if game is over
+            if (gameRoom.isGameOver) {
+              sender.send(
+                JSON.stringify({
+                  type: "joinRejected",
+                  reason: "gameOver",
+                  message: "The game in this room has ended.",
+                  room: parsedContent.room,
+                }),
+              );
+              break;
+            }
+
+            // Prevent duplicate join from the same connection
+            const existingMappedPlayerId = this.connectionToPlayerId.get(
+              sender.id,
+            );
+            if (
+              existingMappedPlayerId &&
+              gameRoom.getPlayer(existingMappedPlayerId)
+            ) {
+              sender.send(
+                JSON.stringify({
+                  type: "joinRejected",
+                  reason: "alreadyJoined",
+                  message: "You are already in this room.",
+                  room: parsedContent.room,
+                }),
+              );
+              break;
+            }
+
+            this.room.broadcast(
+              JSON.stringify({
+                type: "announcement",
+                text: `Player joined: ${
+                  parsedContent.player?.name || "Unknown"
+                }`,
+              }),
+              [sender.id],
+            );
+            sender.send(JSON.stringify({ type: "playerId", id: sender.id }));
 
             // Also maintain legacy room for backward compatibility
             let room = this.rooms.find((r) => r.name === parsedContent.room);
@@ -309,13 +393,31 @@ export default class Server implements Party.Server {
             }
 
             parsedContent.player.id = clientPlayerId || sender.id;
-            parsedContent.player.score = 0;
 
             // Store mapping from connection ID to player ID
             this.connectionToPlayerId.set(sender.id, parsedContent.player.id);
 
-            // Add player to GameRoom (handles isolation)
-            gameRoom.addPlayer(parsedContent.player);
+            // Try to reconnect a previously disconnected player (preserves score/streak)
+            const playerName = parsedContent.player.name;
+            const reconnected = gameRoom.reconnectPlayer(
+              playerName,
+              parsedContent.player.id,
+            );
+
+            if (reconnected) {
+              // Use the reconnected player object (has preserved score etc.)
+              parsedContent.player = reconnected;
+            } else {
+              // Brand-new player joining before game started
+              parsedContent.player.score = 0;
+              gameRoom.addPlayer(parsedContent.player);
+            }
+
+            // Cancel any pending deletion timer since someone joined
+            this.cancelRoomDeletionTimer(parsedContent.room);
+
+            // Notify lobby to cancel any pending deletion timer it may have
+            this.notifyLobby("cancelRoomDeletion", parsedContent.room);
 
             // Sync legacy structures
             room.players = gameRoom.players;
@@ -530,6 +632,8 @@ export default class Server implements Party.Server {
                 this.deleteRoom(parsedContent.room);
               } else {
                 this.scheduleRoomDeletion(parsedContent.room);
+                // Also tell lobby to schedule its own timer (survives DO hibernation)
+                this.notifyLobby("scheduleRoomDeletion", parsedContent.room);
               }
             }
           }
@@ -849,6 +953,8 @@ export default class Server implements Party.Server {
           this.deleteRoom(foundGameRoom.name);
         } else {
           this.scheduleRoomDeletion(foundGameRoom.name);
+          // Also tell lobby to schedule its own timer (survives DO hibernation)
+          this.notifyLobby("scheduleRoomDeletion", foundGameRoom.name);
         }
       }
     } else if (room) {
@@ -873,6 +979,7 @@ export default class Server implements Party.Server {
       // If the room is empty, schedule deletion after 30 seconds
       if (room.count === 0) {
         this.scheduleRoomDeletion(room.name);
+        this.notifyLobby("scheduleRoomDeletion", room.name);
       }
     }
 
@@ -895,8 +1002,89 @@ export default class Server implements Party.Server {
       });
     }
 
-    // Handle POST for creating rooms
+    // Handle POST for creating rooms (and internal notifications from game rooms)
     if (request.method === "POST") {
+      const url = new URL(request.url);
+
+      // --- Internal cross-room notifications (from game room servers) ---
+
+      // A game room was deleted (game over + empty, or 30s timer fired)
+      if (url.searchParams.has("notifyRoomDeleted")) {
+        const roomName = url.searchParams.get("notifyRoomDeleted")!;
+        // Cancel any pending lobby timer for this room
+        this.cancelRoomDeletionTimer(roomName);
+        // Remove from lobby's registry
+        this.gameRooms.delete(roomName);
+        this.rooms = this.rooms.filter((r) => r.name !== roomName);
+        // Broadcast to lobby clients so they remove the room tab
+        this.room.broadcast(
+          JSON.stringify({
+            type: "roomDeleted",
+            roomName: roomName,
+            availableRooms: Array.from(this.gameRooms.keys()),
+          }),
+        );
+        return new Response("ok", {
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+
+      // A game room became empty but game didn't end — schedule 30s deletion on lobby
+      // Instead of blindly deleting after 30s (the lobby's GameRoom copies are always "empty"),
+      // verify with the actual room server before removing.
+      if (url.searchParams.has("scheduleRoomDeletion")) {
+        const roomName = url.searchParams.get("scheduleRoomDeletion")!;
+        if (this.gameRooms.has(roomName)) {
+          // Cancel any existing timer first
+          this.cancelRoomDeletionTimer(roomName);
+
+          const timer = setTimeout(async () => {
+            this.roomDeletionTimers.delete(roomName);
+            try {
+              // Ask the actual room server if it's really empty
+              const roomStub = this.room.context.parties.main.get(roomName);
+              const res = await roomStub.fetch("/");
+              if (res.ok) {
+                const data = (await res.json()) as { count?: number };
+                if (data.count === 0) {
+                  // Room is truly empty — remove from lobby registry
+                  this.gameRooms.delete(roomName);
+                  this.rooms = this.rooms.filter((r) => r.name !== roomName);
+                  this.room.broadcast(
+                    JSON.stringify({
+                      type: "roomDeleted",
+                      roomName,
+                      availableRooms: Array.from(this.gameRooms.keys()),
+                    }),
+                  );
+                }
+                // Otherwise someone rejoined — do nothing
+              }
+            } catch (err) {
+              console.error(
+                `[Lobby] Failed to verify room ${roomName} before deletion:`,
+                err,
+              );
+            }
+          }, 30000);
+
+          this.roomDeletionTimers.set(roomName, timer);
+        }
+        return new Response("ok", {
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+
+      // A player joined a previously empty room — cancel any pending deletion
+      if (url.searchParams.has("cancelRoomDeletion")) {
+        const roomName = url.searchParams.get("cancelRoomDeletion")!;
+        this.cancelRoomDeletionTimer(roomName);
+        return new Response("ok", {
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+
+      // --- Client-facing POST: create a new room ---
       try {
         const body = (await request.json()) as { roomName?: string };
         const roomName = body.roomName;
@@ -966,6 +1154,12 @@ export default class Server implements Party.Server {
             name,
             count: gameRoom.count,
             players: gameRoom.players,
+            isFull: gameRoom.isFull,
+            isInProgress: gameRoom.isInProgress,
+            isGameOver: gameRoom.isGameOver,
+            disconnectedPlayerNames: Array.from(
+              gameRoom.disconnectedPlayers.keys(),
+            ),
           }),
         );
 
@@ -979,10 +1173,18 @@ export default class Server implements Party.Server {
       }
 
       // Return current room state (players in this room)
+      // Include status flags from the GameRoom (the actual source of truth)
+      const currentGameRoom = this.gameRooms.values().next().value;
       const roomData = {
         room: this.room.id,
-        players: this.players,
-        count: this.players.length,
+        players: currentGameRoom ? currentGameRoom.players : this.players,
+        count: currentGameRoom ? currentGameRoom.count : this.players.length,
+        isFull: currentGameRoom ? currentGameRoom.isFull : false,
+        isInProgress: currentGameRoom ? currentGameRoom.isInProgress : false,
+        isGameOver: currentGameRoom ? currentGameRoom.isGameOver : false,
+        disconnectedPlayerNames: currentGameRoom
+          ? Array.from(currentGameRoom.disconnectedPlayers.keys())
+          : [],
       };
 
       return new Response(JSON.stringify(roomData), {

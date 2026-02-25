@@ -12,6 +12,9 @@ export class GameRoom {
   // Players in this room
   players: Player[] = [];
 
+  // Players who disconnected mid-game (keyed by player name for reconnection)
+  disconnectedPlayers: Map<string, Player> = new Map();
+
   // Deck state - each room gets its own shuffled deck
   deck: ShuffledDeck = {
     type: "shuffledDeck",
@@ -80,6 +83,13 @@ export class GameRoom {
   }
 
   /**
+   * Check if the game is currently in progress (past round 1 or has scored rounds)
+   */
+  get isInProgress(): boolean {
+    return this.currentRound > 1 || this.scoredRounds.size > 0;
+  }
+
+  /**
    * Add a player to the room
    */
   addPlayer(player: Player): boolean {
@@ -100,14 +110,40 @@ export class GameRoom {
 
   /**
    * Remove a player from the room by ID
+   * If game is in progress, stash the player for possible reconnection
    */
   removePlayer(playerId: string): Player | null {
     const index = this.players.findIndex((p) => p.id === playerId);
     if (index >= 0) {
       const [removed] = this.players.splice(index, 1);
+      // Stash for reconnection if game is in progress and not over
+      if (this.isInProgress && !this.isGameOver && removed.name) {
+        this.disconnectedPlayers.set(removed.name, removed);
+      }
       return removed;
     }
     return null;
+  }
+
+  /**
+   * Check if a player name was previously in this room (disconnected mid-game)
+   */
+  wasPlayerInRoom(playerName: string): boolean {
+    return this.disconnectedPlayers.has(playerName);
+  }
+
+  /**
+   * Reconnect a previously disconnected player by name.
+   * Returns the stashed player data if found, or null.
+   */
+  reconnectPlayer(playerName: string, newPlayerId: string): Player | null {
+    const stashed = this.disconnectedPlayers.get(playerName);
+    if (!stashed) return null;
+    // Update the player ID to the new connection and re-add
+    stashed.id = newPlayerId;
+    this.players.push(stashed);
+    this.disconnectedPlayers.delete(playerName);
+    return stashed;
   }
 
   /**
@@ -167,6 +203,7 @@ export class GameRoom {
    */
   reset(): void {
     this.players = [];
+    this.disconnectedPlayers.clear();
     this.currentRound = 1;
     this.isGameOver = false;
     this.currentNewsCard = null;
@@ -198,6 +235,9 @@ export class GameRoom {
       currentRound: this.currentRound,
       maxRounds: this.maxRounds,
       isGameOver: this.isGameOver,
+      isFull: this.isFull,
+      isInProgress: this.isInProgress,
+      disconnectedPlayerNames: Array.from(this.disconnectedPlayers.keys()),
       cardIndex: this.cardIndex,
       newsCard: this.currentNewsCard,
       themeStyle: this.currentTheme,
