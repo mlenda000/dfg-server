@@ -9,6 +9,8 @@ export type Player = {
   isReady?: boolean;
   tacticUsed?: string[];
   wasCorrect?: boolean;
+  correctCount?: number;
+  totalPlayed?: number;
   scoreUpdated?: boolean;
   streakUpdated?: boolean;
 };

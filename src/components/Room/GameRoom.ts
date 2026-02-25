@@ -21,6 +21,8 @@ export class GameRoom {
 
   // Game round state
   currentRound: number = 1;
+  maxRounds: number = 5;
+  isGameOver: boolean = false;
 
   // Current card/theme state
   currentNewsCard: any = null;
@@ -147,6 +149,10 @@ export class GameRoom {
    */
   advanceRound(): void {
     this.currentRound++;
+    // Check if the game is over
+    if (this.currentRound > this.maxRounds) {
+      this.isGameOver = true;
+    }
     // Reset player ready states for new round
     this.players.forEach((player) => {
       player.isReady = false;
@@ -162,6 +168,7 @@ export class GameRoom {
   reset(): void {
     this.players = [];
     this.currentRound = 1;
+    this.isGameOver = false;
     this.currentNewsCard = null;
     this.currentTheme = "all";
     this.influencerCard = { villain: "biost", tactic: [] };
@@ -189,6 +196,8 @@ export class GameRoom {
       players: this.players,
       deck: this.deck,
       currentRound: this.currentRound,
+      maxRounds: this.maxRounds,
+      isGameOver: this.isGameOver,
       cardIndex: this.cardIndex,
       newsCard: this.currentNewsCard,
       themeStyle: this.currentTheme,

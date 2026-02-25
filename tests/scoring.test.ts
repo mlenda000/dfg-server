@@ -240,7 +240,7 @@ describe("Scoring Logic Tests", () => {
       expect(result[0].hasStreak).toBe(false);
     });
 
-    it("should maintain streak with mixed answers if any are correct", () => {
+    it("should reset streak with mixed answers if any are wrong", () => {
       const players = [
         createPlayer("player1", "Player 1", 100, 2, [
           "correctTactic",
@@ -262,8 +262,8 @@ describe("Scoring Logic Tests", () => {
         1,
       );
 
-      expect(result[0].streak).toBe(3); // Should increment because one was correct
-      expect(result[0].hasStreak).toBe(true);
+      expect(result[0].streak).toBe(0); // Should reset because one was wrong
+      expect(result[0].hasStreak).toBe(false);
     });
   });
 

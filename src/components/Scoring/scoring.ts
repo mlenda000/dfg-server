@@ -17,13 +17,27 @@ export function calculateScore(
       (p) => p.id === existingPlayer.id,
     );
 
-    // If the player is not found in client players, return the existing player unchanged
-    if (!clientPlayer) return existingPlayer;
+    // If the player is not found in client players, still mark as scored
+    // so areAllScoresUpdated returns true and the game doesn't lock up
+    if (!clientPlayer) {
+      return {
+        ...existingPlayer,
+        scoreUpdated: true,
+        streakUpdated: true,
+        wasCorrect: false,
+        correctCount: 0,
+        totalPlayed: 0,
+        streak: 0,
+        hasStreak: false,
+      };
+    }
 
     // score will be points for this round, currentScore is the players score prior to this round
     let score = 0;
     let currentScore = existingPlayer.score || 0;
     let anyCorrect = false;
+    let correctCount = 0;
+    const totalPlayed = clientPlayer.tacticUsed?.length || 0;
     const prevStreak = existingPlayer.streak || 0;
 
     if (influencerCard && influencerCard.tactic.length > 0) {
@@ -39,6 +53,7 @@ export function calculateScore(
 
       // Process correct tactics
       if (correctTactics.length > 0) {
+        correctCount = correctTactics.length;
         correctTactics.forEach(() => {
           score += CORRECT_ANSWER * 50;
           anyCorrect = true;
@@ -57,8 +72,9 @@ export function calculateScore(
     let updatedScore = currentScore + score;
     updatedScore = Math.max(updatedScore, 0); // Ensure score doesn't go below 0
 
-    // Update streak: increment if player got any correct answers, reset if all wrong
-    const streak = anyCorrect ? prevStreak + 1 : 0;
+    // Update streak: only continues if ALL played tactics are correct (any wrong resets it)
+    const allCorrect = totalPlayed > 0 && correctCount === totalPlayed;
+    const streak = allCorrect ? prevStreak + 1 : 0;
 
     const updatedPlayer: Player = {
       ...existingPlayer,
@@ -68,6 +84,8 @@ export function calculateScore(
       scoreUpdated: true, // Mark score as updated
       streakUpdated: true, // Mark streak as updated
       wasCorrect: anyCorrect, // Set based on whether any answers were correct
+      correctCount, // Number of correct tactics played this round
+      totalPlayed, // Total tactics played this round
     };
 
     // Add streak bonus if player has a streak >= 3

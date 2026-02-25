@@ -524,9 +524,13 @@ export default class Server implements Party.Server {
             // Broadcast updated room state using GameRoom values
             this.room.broadcast(JSON.stringify(leavingGameRoom.toRoomUpdate()));
 
-            // If room is now empty, schedule deletion after 30 seconds
+            // If room is now empty, delete immediately if game ended, otherwise schedule
             if (leavingGameRoom.isEmpty) {
-              this.scheduleRoomDeletion(parsedContent.room);
+              if (leavingGameRoom.wasScored) {
+                this.deleteRoom(parsedContent.room);
+              } else {
+                this.scheduleRoomDeletion(parsedContent.room);
+              }
             }
           }
 
@@ -677,58 +681,109 @@ export default class Server implements Party.Server {
                   type: "scoreUpdate",
                   room: roomKey,
                   players: updatedPlayers,
-                }),
-              );
-
-              // Update last scored round for this room and advance to next round
-              this.roomRounds.set(roomKey, roundNumber);
-
-              // Advance the room's current round to the next round using GameRoom
-              if (roundGameRoom) {
-                roundGameRoom.currentRound = roundNumber + 1;
-                // Prepare players for the next round
-                roundGameRoom.players = roundGameRoom.players.map((p) => ({
-                  ...p,
-                  tacticUsed: [],
-                  isReady: false,
-                  scoreUpdated: false,
-                  streakUpdated: false,
-                }));
-              }
-
-              // Also update legacy room
-              if (roundRoom) {
-                roundRoom.currentRound = roundNumber + 1;
-                roundRoom.players = roundRoom.players.map((p) => ({
-                  ...p,
-                  tacticUsed: [],
-                  isReady: false,
-                  scoreUpdated: false,
-                  streakUpdated: false,
-                }));
-              }
-
-              // Update instance-level for backward compatibility
-              this.currentRound = roundNumber + 1;
-
-              // Broadcast the reset player state so clients update their UI (e.g., hide ready icons)
-              const resetPlayers =
-                roundGameRoom?.players || roundRoom?.players || [];
-              this.room.broadcast(
-                JSON.stringify({
-                  type: "roomUpdate",
-                  room: roomKey,
-                  players: resetPlayers,
-                  currentRound: roundNumber + 1,
-                  count: resetPlayers.length,
+                  isGameOver: roundGameRoom?.isGameOver || false,
+                  maxRounds: roundGameRoom?.maxRounds || 5,
                 }),
               );
             } else {
-              console.error(
-                "Not all players have their scores updated for room",
+              // Safety net: force-mark all unscored players and broadcast anyway
+              // to prevent the game from permanently locking up
+              console.warn(
+                "Not all players scored for room",
                 roomKey,
+                "- forcing scoreUpdate to prevent game lock",
+              );
+              const forcedPlayers = updatedPlayers.map((p) =>
+                p.scoreUpdated
+                  ? p
+                  : {
+                      ...p,
+                      scoreUpdated: true,
+                      streakUpdated: true,
+                      wasCorrect: false,
+                      streak: 0,
+                      hasStreak: false,
+                    },
+              );
+
+              // Update rooms with forced scores
+              if (roundGameRoom) {
+                roundGameRoom.players = forcedPlayers;
+              }
+              if (roundRoom) {
+                roundRoom.players = forcedPlayers;
+              }
+
+              this.players = this.players.map((p) => {
+                const updated = forcedPlayers.find((rp) => rp.id === p.id);
+                return updated ? { ...p, ...updated } : p;
+              });
+
+              this.room.broadcast(
+                JSON.stringify({
+                  type: "scoreUpdate",
+                  room: roomKey,
+                  players: forcedPlayers,
+                  isGameOver: roundGameRoom?.isGameOver || false,
+                  maxRounds: roundGameRoom?.maxRounds || 5,
+                }),
               );
             }
+
+            // Use the final scored players (whether normal or forced)
+            const scoredPlayers =
+              roundGameRoom?.players || roundRoom?.players || updatedPlayers;
+
+            // Update last scored round for this room and advance to next round
+            this.roomRounds.set(roomKey, roundNumber);
+
+            // Advance the room's current round to the next round using GameRoom
+            if (roundGameRoom) {
+              roundGameRoom.currentRound = roundNumber + 1;
+              // Check if the game is over
+              if (roundGameRoom.currentRound > roundGameRoom.maxRounds) {
+                roundGameRoom.isGameOver = true;
+                roundGameRoom.wasScored = true;
+              }
+              // Prepare players for the next round
+              roundGameRoom.players = roundGameRoom.players.map((p) => ({
+                ...p,
+                tacticUsed: [],
+                isReady: false,
+                scoreUpdated: false,
+                streakUpdated: false,
+              }));
+            }
+
+            // Also update legacy room
+            if (roundRoom) {
+              roundRoom.currentRound = roundNumber + 1;
+              roundRoom.players = roundRoom.players.map((p) => ({
+                ...p,
+                tacticUsed: [],
+                isReady: false,
+                scoreUpdated: false,
+                streakUpdated: false,
+              }));
+            }
+
+            // Update instance-level for backward compatibility
+            this.currentRound = roundNumber + 1;
+
+            // Broadcast the reset player state so clients update their UI (e.g., hide ready icons)
+            const resetPlayers =
+              roundGameRoom?.players || roundRoom?.players || [];
+            this.room.broadcast(
+              JSON.stringify({
+                type: "roomUpdate",
+                room: roomKey,
+                players: resetPlayers,
+                currentRound: roundNumber + 1,
+                maxRounds: roundGameRoom?.maxRounds || 5,
+                isGameOver: roundGameRoom?.isGameOver || false,
+                count: resetPlayers.length,
+              }),
+            );
           } else {
             console.error(
               "❌ [endOfRound] Invalid players data or room not found:",
@@ -788,9 +843,13 @@ export default class Server implements Party.Server {
       // Broadcast updated room state from GameRoom
       this.room.broadcast(JSON.stringify(foundGameRoom.toRoomUpdate()));
 
-      // If the room is empty, schedule deletion after 30 seconds
+      // If the room is empty, delete immediately if game ended, otherwise schedule
       if (foundGameRoom.isEmpty) {
-        this.scheduleRoomDeletion(foundGameRoom.name);
+        if (foundGameRoom.wasScored) {
+          this.deleteRoom(foundGameRoom.name);
+        } else {
+          this.scheduleRoomDeletion(foundGameRoom.name);
+        }
       }
     } else if (room) {
       // Fallback to legacy room handling
