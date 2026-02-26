@@ -118,16 +118,20 @@ export class RoomManager {
   }
 
   /**
-   * Delete a room if it's empty
+   * Delete a room if it has no active players
+   * Rooms with only disconnected players (no active connections) are also eligible for deletion
    * @returns true if room was deleted, false otherwise
    */
   deleteRoom(roomName: string): boolean {
     const gameRoom = this.gameRooms.get(roomName);
 
-    // Only delete if room exists and is empty
-    if (!gameRoom || !gameRoom.isEmpty) {
+    // Only delete if room exists and has no active players
+    if (!gameRoom || !gameRoom.hasNoActivePlayers) {
       return false;
     }
+
+    // Clear any remaining disconnected players before deletion
+    gameRoom.disconnectedPlayers.clear();
 
     // Reset and remove GameRoom
     gameRoom.reset();
@@ -164,7 +168,7 @@ export class RoomManager {
 
   /**
    * Remove a player from a room
-   * Schedules room deletion if room becomes empty
+   * Schedules room deletion if no active players remain
    * @returns Object with room update info and whether deletion was scheduled
    */
   removePlayerFromRoom(
@@ -183,9 +187,10 @@ export class RoomManager {
 
     const removed = gameRoom.removePlayer(playerId);
 
-    // If room is now empty, schedule deletion
+    // Schedule deletion when no active connections remain
+    // (server.ts handles the reconnection grace period for disconnected players separately)
     let scheduledDeletion = false;
-    if (gameRoom.isEmpty) {
+    if (gameRoom.hasNoActivePlayers) {
       this.scheduleRoomDeletion(roomName);
       scheduledDeletion = true;
     }

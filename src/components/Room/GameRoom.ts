@@ -76,10 +76,25 @@ export class GameRoom {
   }
 
   /**
-   * Check if room is empty
+   * Check if room is empty (no active AND no disconnected players expecting to reconnect)
+   * A room with disconnected players during an in-progress game is NOT considered empty.
    */
   get isEmpty(): boolean {
+    return this.players.length === 0 && !this.hasDisconnectedPlayers;
+  }
+
+  /**
+   * Check if there are no active connections (but there may be disconnected players)
+   */
+  get hasNoActivePlayers(): boolean {
     return this.players.length === 0;
+  }
+
+  /**
+   * Check if there are disconnected players waiting to reconnect
+   */
+  get hasDisconnectedPlayers(): boolean {
+    return this.disconnectedPlayers.size > 0 && this.isInProgress && !this.isGameOver;
   }
 
   /**
@@ -141,6 +156,12 @@ export class GameRoom {
     if (!stashed) return null;
     // Update the player ID to the new connection and re-add
     stashed.id = newPlayerId;
+    // Reset ready state so the player must explicitly mark ready again
+    // This prevents the "stuck ready" loop that triggers repeated endOfRound
+    stashed.isReady = false;
+    stashed.tacticUsed = [];
+    stashed.scoreUpdated = false;
+    stashed.streakUpdated = false;
     this.players.push(stashed);
     this.disconnectedPlayers.delete(playerName);
     return stashed;
@@ -238,6 +259,7 @@ export class GameRoom {
       isFull: this.isFull,
       isInProgress: this.isInProgress,
       disconnectedPlayerNames: Array.from(this.disconnectedPlayers.keys()),
+      disconnectedCount: this.disconnectedPlayers.size,
       cardIndex: this.cardIndex,
       newsCard: this.currentNewsCard,
       themeStyle: this.currentTheme,

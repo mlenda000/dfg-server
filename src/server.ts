@@ -404,9 +404,11 @@ export default class Server implements Party.Server {
               parsedContent.player.id,
             );
 
+            let isReconnection = false;
             if (reconnected) {
               // Use the reconnected player object (has preserved score etc.)
               parsedContent.player = reconnected;
+              isReconnection = true;
             } else {
               // Brand-new player joining before game started
               parsedContent.player.score = 0;
@@ -434,6 +436,30 @@ export default class Server implements Party.Server {
             const roomUpdateMessage = gameRoom.toRoomUpdate();
 
             this.room.broadcast(JSON.stringify(roomUpdateMessage));
+
+            // If this was a reconnection, send a targeted message to the
+            // reconnecting player with their full restored state so the
+            // client can pick up exactly where they left off.
+            if (isReconnection) {
+              sender.send(
+                JSON.stringify({
+                  type: "reconnectState",
+                  room: parsedContent.room,
+                  player: reconnected,
+                  currentRound: gameRoom.currentRound,
+                  maxRounds: gameRoom.maxRounds,
+                  cardIndex: gameRoom.cardIndex,
+                  newsCard: gameRoom.currentNewsCard,
+                  themeStyle: gameRoom.currentTheme,
+                  deck: gameRoom.deck,
+                  players: gameRoom.players,
+                  influencerCard: gameRoom.influencerCard,
+                  isGameOver: gameRoom.isGameOver,
+                  isInProgress: gameRoom.isInProgress,
+                  count: gameRoom.count,
+                }),
+              );
+            }
           } catch (error) {
             console.error("Error handling playerEnters:", error);
             sender.send(
@@ -626,7 +652,7 @@ export default class Server implements Party.Server {
             // Broadcast updated room state using GameRoom values
             this.room.broadcast(JSON.stringify(leavingGameRoom.toRoomUpdate()));
 
-            // If room is now empty, delete immediately if game ended, otherwise schedule
+            // If room is now truly empty (no active + no disconnected), handle deletion
             if (leavingGameRoom.isEmpty) {
               if (leavingGameRoom.wasScored) {
                 this.deleteRoom(parsedContent.room);
@@ -654,6 +680,10 @@ export default class Server implements Party.Server {
           if (endGameRoom) {
             // Mark the game as ended
             endGameRoom.wasScored = true;
+            endGameRoom.isGameOver = true;
+
+            // Clear disconnected players — game is over, no reconnection needed
+            endGameRoom.disconnectedPlayers.clear();
 
             // Broadcast game ended to all players in the room
             this.room.broadcast(
@@ -874,6 +904,14 @@ export default class Server implements Party.Server {
             // Update instance-level for backward compatibility
             this.currentRound = roundNumber + 1;
 
+            // Advance the current news card to the next card in the deck
+            // so ALL clients receive the same authoritative next card
+            const nextCardIndex = roundNumber; // currentRound is now roundNumber+1, cardIndex = currentRound-1 = roundNumber
+            if (roundGameRoom && roundGameRoom.deck?.data?.[nextCardIndex]) {
+              roundGameRoom.currentNewsCard =
+                roundGameRoom.deck.data[nextCardIndex];
+            }
+
             // Broadcast the reset player state so clients update their UI (e.g., hide ready icons)
             const resetPlayers =
               roundGameRoom?.players || roundRoom?.players || [];
@@ -886,6 +924,8 @@ export default class Server implements Party.Server {
                 maxRounds: roundGameRoom?.maxRounds || 5,
                 isGameOver: roundGameRoom?.isGameOver || false,
                 count: resetPlayers.length,
+                cardIndex: nextCardIndex,
+                newsCard: roundGameRoom?.currentNewsCard || null,
               }),
             );
           } else {
@@ -947,7 +987,8 @@ export default class Server implements Party.Server {
       // Broadcast updated room state from GameRoom
       this.room.broadcast(JSON.stringify(foundGameRoom.toRoomUpdate()));
 
-      // If the room is empty, delete immediately if game ended, otherwise schedule
+      // Only schedule deletion if there are truly no players remaining
+      // (no active players AND no disconnected players expecting to reconnect)
       if (foundGameRoom.isEmpty) {
         if (foundGameRoom.wasScored) {
           this.deleteRoom(foundGameRoom.name);
@@ -956,6 +997,22 @@ export default class Server implements Party.Server {
           // Also tell lobby to schedule its own timer (survives DO hibernation)
           this.notifyLobby("scheduleRoomDeletion", foundGameRoom.name);
         }
+      } else if (
+        foundGameRoom.hasNoActivePlayers &&
+        foundGameRoom.hasDisconnectedPlayers
+      ) {
+        // All active connections gone but disconnected players exist (mid-game)
+        // Schedule a longer grace period to allow reconnection
+        this.cancelRoomDeletionTimer(foundGameRoom.name);
+        const reconnectTimer = setTimeout(() => {
+          // If still no active players after grace period, clear disconnected and delete
+          if (foundGameRoom.hasNoActivePlayers) {
+            foundGameRoom.disconnectedPlayers.clear();
+            this.deleteRoom(foundGameRoom.name);
+            this.notifyLobby("notifyRoomDeleted", foundGameRoom.name);
+          }
+        }, 120000); // 2 minute grace period for reconnection
+        this.roomDeletionTimers.set(foundGameRoom.name, reconnectTimer);
       }
     } else if (room) {
       // Fallback to legacy room handling
@@ -1045,8 +1102,14 @@ export default class Server implements Party.Server {
               const roomStub = this.room.context.parties.main.get(roomName);
               const res = await roomStub.fetch("/");
               if (res.ok) {
-                const data = (await res.json()) as { count?: number };
-                if (data.count === 0) {
+                const data = (await res.json()) as {
+                  count?: number;
+                  disconnectedCount?: number;
+                };
+                if (
+                  data.count === 0 &&
+                  (!data.disconnectedCount || data.disconnectedCount === 0)
+                ) {
                   // Room is truly empty — remove from lobby registry
                   this.gameRooms.delete(roomName);
                   this.rooms = this.rooms.filter((r) => r.name !== roomName);
@@ -1160,6 +1223,7 @@ export default class Server implements Party.Server {
             disconnectedPlayerNames: Array.from(
               gameRoom.disconnectedPlayers.keys(),
             ),
+            disconnectedCount: gameRoom.disconnectedPlayers.size,
           }),
         );
 
@@ -1185,6 +1249,9 @@ export default class Server implements Party.Server {
         disconnectedPlayerNames: currentGameRoom
           ? Array.from(currentGameRoom.disconnectedPlayers.keys())
           : [],
+        disconnectedCount: currentGameRoom
+          ? currentGameRoom.disconnectedPlayers.size
+          : 0,
       };
 
       return new Response(JSON.stringify(roomData), {
