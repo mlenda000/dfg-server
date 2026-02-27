@@ -661,6 +661,21 @@ export default class Server implements Party.Server {
                 // Also tell lobby to schedule its own timer (survives DO hibernation)
                 this.notifyLobby("scheduleRoomDeletion", parsedContent.room);
               }
+            } else if (
+              leavingGameRoom.hasNoActivePlayers &&
+              leavingGameRoom.hasDisconnectedPlayers
+            ) {
+              // All active connections gone but disconnected players exist (mid-game refresh)
+              // Schedule a grace period for reconnection before cleaning up
+              this.cancelRoomDeletionTimer(parsedContent.room);
+              const reconnectTimer = setTimeout(() => {
+                if (leavingGameRoom.hasNoActivePlayers) {
+                  leavingGameRoom.disconnectedPlayers.clear();
+                  this.deleteRoom(parsedContent.room);
+                  this.notifyLobby("notifyRoomDeleted", parsedContent.room);
+                }
+              }, 120000); // 2 minute grace period for reconnection
+              this.roomDeletionTimers.set(parsedContent.room, reconnectTimer);
             }
           }
 
