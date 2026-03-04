@@ -2,438 +2,254 @@
   "influencerCards": [
     {
       "id": "3NbdMcLIIfvTEmuLmpnf",
-      "caption": "🚨 ALERT: Your school water fountain is FILLED with deadly chemicals! ☠️🚰",
-      "bodyCopy": "Scientists just discovered that school water fountains contain a dangerous chemical also found in nuclear waste! Some schools have even been caught hiding the truth because they don’t want to spend money fixing the pipes. Experts say drinking this water could cause permanent brain damage—but no one is warning students! If you care about your health, NEVER drink from a school water fountain again!",
+      "caption": "Your favorite songs have secret messages that control your mind! 🎵🧠",
+      "bodyCopy": "Popular songs hide secret messages that change how you think! Kids are feeling different after listening and talking about it online! Don't ignore the signs—share this now!",
       "collection": "misinformation_cards",
       "harm": [
-        "Fabricates a completely fake danger, making kids afraid to drink water at school.",
-        "Uses fear to create panic, even though school drinking water is tested for safety.",
-        "Makes kids distrust science and teachers, believing they’re hiding the truth."
+        "Celebs mix jokes with fear to make you think normal music is dangerous, causing unnecessary worry. "
       ],
-      "howToSpotIt": [
-        "Does the post name real scientists and sources, or just say 'experts warn'?",
-        "Are real schools and news outlets talking about this, or only random social media accounts?",
-        "Is it using extreme language like 'deadly,' 'toxic,' or 'brain damage' without providing proof?"
-      ],
-      "motive": "Some social media accounts spread fake health scares just to get clicks, likes, and followers.",
-      "newsImage": "biost_water-fountain.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "tacticUsed": ["Fabrication", "Fear-mongering"],
-      "tacticUsedImage": "",
-      "takeaway": "Misinformation makes up fake dangers to scare you into believing lies! Always check real sources and scientific facts before panicking over a viral warning.",
-      "video": "",
-      "villain": "The_Biost"
+      "newsImage": "celeb_songs.webp",
+      "tacticUsed": ["tricky-jokes", "fear-mongering"],
+      "takeaway": "Just because lots of people online say something doesn't make it true—check with trusted adults.",
+      "villain": "The_Celeb"
     },
     {
       "id": "8m9aTyLTyoBZpw7q0I0O",
       "caption": "👻💍 “Married… to a Ghost?!”",
-      "bodyCopy": "A woman named Amanda Teague, from the UK, actually claimed to have married the ghost of a 300-year-old pirate named Jack in a spiritual ceremony in 2018. She even had a legal wedding ceremony at sea. Later, she announced that she was 'divorcing' the ghost because he had become too controlling and was draining her energy.",
+      "bodyCopy": "Amanda Teague from the UK married a 300-year-old pirate ghost in 2018, then divorced him because he was too controlling and draining her energy!",
       "collection": "misinformation_cards",
-      "harm": null,
-      "howToSpotIt": null,
-      "motive": null,
-      "newsImage": "celeb_ghost.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "tacticUsed": ["True"],
-      "tacticUsedImage": "",
-      "takeaway": null,
-      "video": "",
-      "villain": "The_Celeb"
+      "harm": "Bots spread bizarre true stories to get clicks, making it harder to distinguish important news from entertainment.",
+      "newsImage": "bots_married.webp",
+      "tacticUsed": ["true"],
+      "takeaway": "This one’s real, but ask if stories are newsworthy or just clickbait designed to grab your attention for engagement.",
+      "villain": "The_Bots"
     },
     {
       "id": "AlHVhsG70CY18sL97kbP",
       "caption": "BREAKING: Scientists STUNNED by ‘Secret Alien Message’ Caught on NASA Radar! 👽📡",
-      "bodyCopy": "NASA has just intercepted a mysterious signal from deep space, and scientists are panicking! Some experts believe this could be the first confirmed message from aliens, but the government is keeping it secret! Why won’t they tell us the truth? Swipe up to see the leaked recording before it gets deleted!",
+      "bodyCopy": "NASA intercepted a mysterious signal from space and scientists are panicking! Experts think it's aliens, but the government is hiding it! Swipe up to see the leaked recording!",
       "collection": "misinformation_cards",
       "harm": [
-        "The headline is misleading—there’s no proof of an actual alien message.",
-        "The article might have nothing to do with aliens or just repeat vague scientific theories.",
-        "Some websites use fake or exaggerated claims to trick people into clicking, just to make money from ads."
+        "Bots create clickbait headlines with wild claims just to get clicks and make money from ads."
       ],
-      "howToSpotIt": [
-        "Does the article actually provide proof, or just hype?",
-        "Are real scientists or NASA confirming this, or just random blogs?",
-        "Does the website seem sketchy, full of ads, or filled with other clickbait stories?"
-      ],
-      "motive": "Fake news websites use clickbait to get views and make money.",
-      "newsImage": "bot_alien-message.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "tacticUsed": ["Clickbait"],
-      "tacticUsedImage": "",
-      "takeaway": "If a headline sounds too crazy to be true, it probably is! Clickbait tricks people into sharing before checking the facts. Always read carefully before believing or spreading news!",
-      "video": "",
+      "newsImage": "bots_nasa.webp",
+      "tacticUsed": ["clickbait"],
+      "takeaway": "If there's no real proof, no official NASA statement, and the site looks sketchy—it's probably clickbait. ",
       "villain": "The_Bots"
     },
     {
       "id": "CrmzsFffCE4QT5cXwS8Q",
       "caption": "WARNING! Your toothpaste is slowly POISONING YOU! ☠️🚨",
-      "bodyCopy": "Did you know that fluoride—the chemical in most toothpastes—is also used in PESTICIDES and RAT POISON?! Experts are now WARNING that fluoride damages your brain, lowers IQ, and is linked to deadly diseases! But big companies don’t want you to know because they make billions selling it. Even worse, this toxic chemical is in your drinking water too! Are you still using fluoride toothpaste?!",
+      "bodyCopy": "Fluoride in toothpaste is also used in pesticides and rat poison! Experts warn it damages your brain! Switch to our all-natural \"PureFresh\" toothpaste to protect your family today!",
       "collection": "misinformation_cards",
       "harm": [
-        "This twists real science—fluoride is safe at low levels and helps prevent cavities.",
-        "Spreading fear like this makes people stop using toothpaste, leading to bad dental health.",
-        "It creates distrust in scientists and doctors, making it easier for fake 'natural' products to scam people."
+        "Biosts twist real science to scare you about safe products, then sell expensive \"natural\" alternatives."
       ],
-      "howToSpotIt": [
-        "Does it only focus on the scary parts without mentioning how fluoride actually helps teeth?",
-        "Are real dentists and scientists warning about this, or just random influencers?",
-        "Does the post try to sell you something, like an 'all-natural' alternative?"
-      ],
-      "motive": "Some companies use fear to sell overpriced 'fluoride-free' toothpaste.",
-      "newsImage": "biost_toothbrush.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "tacticUsed": ["Fear-mongering"],
-      "tacticUsedImage": "",
-      "takeaway": "Not everything that sounds scary is dangerous! Fear-mongering makes everyday things seem toxic while hiding real facts. Always check scientific sources before believing health claims!",
-      "video": "",
+      "newsImage": "biost_toothpaste.webp",
+      "tacticUsed": ["fear-mongering"],
+      "takeaway": "When posts create fear about everyday products to sell solutions, ask real doctors before believing or buying.",
       "villain": "The_Biost"
     },
     {
       "id": "FiuCHqwmXA0FCdhhG6Ey",
       "caption": "WOW! MrBeast is giving away FREE MONEY! 💰🔥",
-      "bodyCopy": "🚨HURRY! MrBeast just announced on Instagram that he’s giving away $1,000 to 1,000 lucky fans! 🤑 All you have to do is DM him your CashApp or PayPal, and you could be next! Look at all the people in the comments saying they already got paid! Don’t miss out—he’s only doing this for the next 24 hours!",
+      "bodyCopy": "MrBeast just announced he's giving away $1,000 to lucky fans! Just DM your PayPal details and you could be next! Don't miss out—only 24 hours left!",
       "collection": "misinformation_cards",
       "harm": [
-        "The account is fake—it’s not the real MrBeast, and the giveaway doesn’t exist.",
-        "If kids send their bank details or passwords, they could lose money or get hacked.",
-        "Some scammers even pretend to send 'winnings' but then ask for a 'small fee' before releasing the prize—stealing even more money!"
+        "Celebs create fake accounts pretending to be stars, tricking kids into scams and stealing personal info."
       ],
-      "howToSpotIt": [
-        "Does the username have weird letters or extra symbols (like @MrBeast_OfficialFreeCash)?",
-        "Is the account new with no real videos or verified checkmarks?",
-        "Does the real MrBeast’s official account mention the giveaway? (If not, it’s fake!)"
-      ],
-      "motive": "The scammer wants to steal money or personal information from young people.",
-      "newsImage": "bot_1000giveaway.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "tacticUsed": ["Impersonation"],
-      "tacticUsedImage": "",
-      "takeaway": "Scammers pretend to be famous people to trick you! Always check the username, look for verification, and never send money or personal details to random accounts. If it sounds too good to be true, it probably is!",
-      "video": "",
-      "villain": "The_Bots"
+      "newsImage": "celeb_mrbeast.webp",
+      "tacticUsed": ["impersonation"],
+      "takeaway": "Check the username carefully, look for verification badges, and never DM personal payment info to anyone.",
+      "villain": "The_Celeb"
     },
     {
       "id": "HdwbtWuKMs6zhKtGaGW7",
-      "caption": "WARNING! Your school lunches might be POISONED! 🚨",
-      "bodyCopy": "BREAKING NEWS: A shocking new report reveals that cafeteria food is FILLED with toxic chemicals that could seriously harm your brain and body! Experts say some of the same chemicals used in cleaning products and PESTICIDES are hiding in your school lunch. Scientists are WARNING parents to stop letting their kids eat school food immediately! The government knows the truth but is covering it up. Are you still eating this stuff?!",
+      "caption": "Your friends are just being paranoid!",
+      "bodyCopy": "Sharing your gamer username and personal details online helps you make more friends! Don't worry about privacy—everyone does it! Your friends are just being overly cautious and dramatic! ",
       "collection": "misinformation_cards",
       "harm": [
-        "Students might panic and stop eating school meals even though the food is safe.",
-        "The post twists facts to make a normal ingredient sound deadly.",
-        "It creates fear and distrust toward schools, nutritionists, and even science."
+        "Oligs make you doubt friends who care about you so companies can profit from your personal data."
       ],
-      "howToSpotIt": [
-        "Does the post mention real experts and studies, or just say 'scientists warn'?",
-        "Are the 'dangerous chemicals' actually safe in tiny amounts, like in many foods?",
-        "Is the goal to inform or to SCARE? If it’s trying to panic you, it’s probably fear-mongering."
-      ],
-      "motive": "Fear-based posts spread FAST, getting tons of clicks and shares.",
-      "newsImage": "olig_school-lunch.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "tacticUsed": ["Fear-mongering"],
-      "tacticUsedImage": "",
-      "takeaway": "Not everything that sounds scary is true! Misinformation spreads fear by leaving out important facts. Before believing something shocking, check real experts and sources!",
-      "video": "",
+      "newsImage": "olig_paranoid.webp",
+      "tacticUsed": ["gaslighting"],
+      "takeaway": "If posts dismiss privacy concerns as \"dramatic,\" ask yourself why someone might want your personal information.",
       "villain": "The_Olig"
     },
     {
       "id": "JpQ4qbikPrVsWFlp6geu",
       "collection": "misinformation_cards",
-      "caption": "FLIES AREN’T REAL! 🚨 The government has been SPYING on you this whole time! 🤯",
-      "bodyCopy": "Have you ever noticed how flies appear out of nowhere and follow you around? That’s because they AREN’T REAL—they’re actually tiny surveillance drones disguised as insects! The government secretly replaced real flies years ago to spy on us without us knowing. Scientists have even found 'flies' that never land on food and don’t even react to being swatted! WAKE UP—don’t trust the flies!",
-      "motive": "The original post was a joke, but now bots and trolls are pushing it like it’s real.",
+      "caption": "Kids with outdated phones are facing social isolation and depression at school! Parents must act NOW! 😢📱",
+      "bodyCopy": "New studies show children with outdated technology experience devastating bullying and mental health! Don't let your child suffer social rejection—they need the latest iPhone to feel valued and included!",
       "harm": [
-        "Some people start believing the joke is real, spreading fake conspiracy theories.",
-        "It creates unnecessary fear and distrust in science and government.",
-        "It normalizes believing random internet claims without checking facts."
+        "Oligs makes up fake phone bullying stories to guilt your parents into buying expensive tech for company profits."
       ],
-      "howToSpotIt": [
-        "Does the post offer any real proof, or just funny 'evidence' that doesn’t make sense?",
-        "Did the idea start as a meme or satire, but now some accounts act like it’s serious?",
-        "Are bots or fake accounts spamming the same message across different platforms?"
-      ],
-      "tacticUsed": ["tricky-jokes"],
-      "tacticUsedImage": "",
-      "takeaway": "Not all jokes stay jokes—some spread so much that people start believing them! Always check where a claim started before assuming it’s true. Just because something sounds wild or funny doesn’t mean it’s real!",
-      "villain": "The_Bots",
-      "newsImage": "bot_flies.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": ""
+      "tacticUsed": ["emotional-manipulation"],
+      "takeaway": "When posts create panic about social problems that conveniently require expensive purchases, question who benefits from the fear.",
+      "villain": "The_Olig",
+      "newsImage": "olig_outdated.webp"
     },
     {
       "id": "KBjGXacaBQkeAlXV1fX5",
       "collection": "misinformation_cards",
-      "caption": "🐱✈️ “Raining Cats?! The Wildest Science Fail Ever!",
-      "bodyCopy": "Scientists tried to stop mosquitoes in Borneo, but instead, they messed up the whole ecosystem—wasps died, caterpillars ate roofs, geckos got poisoned, cats disappeared, and rats took over, spreading even worse diseases, so the only solution was to parachute live cats into Borneo to fix the chaos!",
-      "tacticUsed": ["True"],
-      "tacticUsedImage": "",
+      "caption": "Raining Cats?! The Wildest Science Fail Ever! ✈️",
+      "bodyCopy": "Scientists tried stopping mosquitoes in Borneo but messed up the ecosystem so badly that rats took over and so they had to parachute live cats to fix it!",
+      "tacticUsed": ["true"],
       "villain": "The_Biost",
-      "newsImage": "biost_cat.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": ""
+      "newsImage": "biost_cat.webp",
+      "harm": "Biosts use wild science stories to make all scientific research seem unreliable and dangerous to your health.",
+      "takeaway": "This story is real, but don't let wild science stories make you distrust research—check facts first."
     },
     {
       "id": "PSLQj8WmCV41R7wshE5o",
       "collection": "misinformation_cards",
       "caption": "This is SO SAD… 😢💔 You won’t believe what happened!",
-      "bodyCopy": "A brave 10-year-old girl is fighting for her life in the hospital. She always dreamed of being famous, but she’s running out of time. Her last wish is to reach 1 million followers before her next surgery. 🥺💖 If you have a heart, PLEASE FOLLOW and SHARE—show her she’s not alone! If you scroll past without helping… that says a lot about you. 😞💔",
-      "motive": "The account owner wants more followers and shares by making people feel guilty if they don’t help.",
+      "bodyCopy": "A brave 10-year-old girl is fighting for her life. Her last wish is 1 million followers before surgery. If you scroll past without helping, what does that say about you?",
       "harm": [
-        "The story is fake—the girl doesn’t exist, and scammers use fake 'sad' posts to gain followers fast.",
-        "People get emotionally tricked into sharing without checking if it’s real.",
-        "Scammers might later change the account into something else (like selling products) after getting tons of followers."
+        "Olig fakes sad stories to manipulate your emotions, get followers, and profit from your kindness."
       ],
-      "howToSpotIt": [
-        "Does the post give real details (name, hospital, news sources), or is it vague?",
-        "If you reverse-search the image, does it come from a different story?",
-        "Do real news outlets confirm the story, or is it just spreading on random accounts?"
-      ],
-      "tacticUsed": ["Emotional_Manipulation"],
-      "tacticUsedImage": "",
-      "takeaway": "Some people use fake emotional stories to get clicks and followers! Always check for real sources before believing or sharing. Just because something feels sad doesn’t mean it’s true!",
-      "villain": "The_Celeb",
-      "newsImage": "celeb_sad.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": ""
+      "tacticUsed": ["emotional-manipulation"],
+      "takeaway": "If the story feels vague, has no real news coverage, or uses guilt—pause and fact-check first.",
+      "villain": "The_Olig",
+      "newsImage": "olig_sad.webp"
     },
     {
       "id": "RBGAonFcujPSM7erl5vH",
       "collection": "misinformation_cards",
-      "caption": "🎮🚫 Fortnite Pro Caught Cheating!",
-      "bodyCopy": "A pro Fortnite player named RepulseGod was caught cheating in a huge tournament by letting someone else play on his account to help him qualify. He thought he could get away with it, but Epic Games found out, disqualified him, took away his prize money, and banned him from future events. He had to apologize to his fans, and his career took a major hit.",
-      "tacticUsed": ["True"],
+      "caption": "Fortnite Pro Caught Cheating! 🎮",
+      "bodyCopy": "Pro player RepulseGod was caught letting someone else play his account in tournaments. Epic Games disqualified him, took his prize money, and banned him permanently.",
+      "tacticUsed": ["true"],
       "tacticUsedImage": "",
-      "villain": "The_Bots",
-      "newsImage": "bot_fortnite.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": ""
+      "villain": "The_Celeb",
+      "newsImage": "celeb_fortnite.webp",
+      "harm": "Celebs blast true stories like this everywhere, turning real drama into viral outrage—making it hard to tell if you're learning something or just being pushed to react.",
+      "takeaway": "This one’s true—but ask who's sharing it and why before getting swept up in the gaming celebrity drama."
     },
     {
       "id": "ZUEEunTVLA3pgAJxvoGf",
       "collection": "misinformation_cards",
       "caption": "Top scientist QUITS after exposing government weather control! 🌪️⚡",
-      "bodyCopy": "Dr. Michael Reeves, a former NASA scientist, has just resigned in protest after revealing that the government has been controlling the weather for decades! He leaked secret documents showing how powerful world leaders use hidden satellites to create hurricanes, wildfires, and even heatwaves! But now, NASA is deleting all proof and saying Dr. Reeves ‘never existed.’ Why are they so desperate to hide the truth? WAKE UP and spread this before it’s gone!",
-      "motive": "Misinformation groups create fake experts to push an agenda.",
+      "bodyCopy": "Dr. Michael Reeves resigned after revealing the government controls weather with secret satellites! Now NASA is deleting proof and saying he \"never existed.\" Wake up and spread this!",
       "harm": [
-        "The scientist isn’t real—the name and story are completely made up.",
-        "Fake claims like this cause distrust in real scientists and climate research.",
-        "These hoaxes fuel conspiracy theories that make it harder for people to believe real science."
+        "Biosts invent fake scientists to spread conspiracy theories and make people distrust real climate science."
       ],
-      "howToSpotIt": [
-        "Can you find real proof of this scientist or are they only mentioned in sketchy sources?",
-        "Does the post offer documents or evidence, or just claim they exist?",
-        "Are real climate scientists talking about this, or is it only from conspiracy pages?"
-      ],
-      "tacticUsed": ["Impersonation"],
-      "tacticUsedImage": "",
-      "takeaway": "Fake experts and made-up whistleblowers are common in misinformation! Always check if a person actually exists and if real experts confirm their claims before believing shocking stories.",
-      "villain": "The_Olig",
-      "newsImage": "olig_top-scientist.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": ""
+      "tacticUsed": ["impersonation"],
+      "takeaway": "The takeaway: If no real experts support it and the person doesn't exist on official sites—it's fake.",
+      "villain": "The_Biost",
+      "newsImage": "biost_scientist.webp"
     },
     {
       "id": "amWonHKnJkxbHAzO9Jqu",
       "collection": "misinformation_cards",
-      "caption": "🚰💰 “The Fancy Tap Water Scam!”",
-      "bodyCopy": "In the early 2000s, Coca-Cola released Dasani bottled water, claiming it was super pure and high-quality. But people quickly found out it was just regular tap water—the same water that came from their sinks! Things got even worse when tests found a dangerous chemical in the water, forcing Coca-Cola to pull every bottle off the shelves.",
-      "motive": null,
-      "tacticUsed": ["True"],
-      "tacticUsedImage": "",
-      "newsImage": "olig_coca-cola.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": "",
+      "caption": "The Fancy Tap Water Scam!",
+      "bodyCopy": "Coca-Cola sold Dasani as premium water but it was just tap water! When dangerous chemicals were found, they had to pull every bottle from shelves immediately.",
+      "tacticUsed": ["true"],
+      "newsImage": "olig_water.webp",
       "villain": "The_Olig",
-      "harm": null,
-      "howToSpotIt": null,
-      "takeaway": null
+      "harm": "This shows how Olig companies use fancy branding to sell ordinary products at premium prices for profit.",
+      "takeaway": "Yep this really happened—it shows how companies use fancy marketing to fool people. Don't trust labels, check the facts!"
     },
     {
       "id": "fmgfSLePkbfwRTvbYaWP",
       "collection": "misinformation_cards",
-      "caption": "😭 Addison Rae EXPOSED in leaked video—sobbing & quitting social media! 💔",
-      "bodyCopy": "A shocking new leaked video shows Addison Rae crying uncontrollably, saying: 'I can’t take this anymore. I’m done with social media forever.' Fans are devastated, flooding the comments with #StayStrongAddison and begging her to come back. Some even say she was bullied off the internet.",
-      "motive": "The fake video’s creator wants views, shares, and viral attention.",
-      "tacticUsed": ["Deepfakes", "Emotional_Manipulation"],
-      "tacticUsedImage": "",
-      "newsImage": "celeb_adyson.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": "",
+      "caption": "SHOCKING: Parents who limit phone time are damaging their kids' futures! 📱💔",
+      "bodyCopy": "Studies show kids with phone limits score lower on technology skills tests! While other kids learn coding and digital creativity, YOUR parents are holding you back from essential 21st-century skills!",
+      "tacticUsed": ["cherry-picking", "emotional-manipulation"],
+      "newsImage": "olig_limits.webp",
       "villain": "The_Celeb",
       "harm": [
-        "Deepfake videos create false scandals, making it look like someone said or did something they never did.",
-        "Fans get emotionally manipulated, feeling sad or betrayed over a completely fake event.",
-        "False information spreads FAST, because people react emotionally before checking the facts."
+        "Olig cherry-picks weak studies and makes you distrust parents who set healthy boundaries for your wellbeing."
       ],
-      "howToSpotIt": [
-        "Does the video look slightly off, like Addison’s lips don’t match her words?",
-        "Did Addison or real news sources confirm this, or is it only random accounts posting it?",
-        "Are comments full of emotional reactions, but no real evidence proving it’s real?"
-      ],
-      "takeaway": "Deepfakes and emotional manipulation trick you into believing fake drama! Before reacting or sharing, always check if it’s real—celebrities don’t just disappear overnight!"
+      "takeaway": "If posts make you angry at parents without showing full research—they might be manipulating your emotions."
     },
     {
       "id": "guYzfXvAs1AF640hSOjv",
       "collection": "misinformation_cards",
-      "caption": "MrBeast’s SECRET CONNECTION to the Illuminati EXPOSED! 👀🕶️",
-      "bodyCopy": "Have you ever noticed the strange symbols hidden in MrBeast’s videos? Some say he’s not just a YouTuber—he’s actually part of the Illuminati, a secret group that controls social media and entertainment! His insane success, massive giveaways, and never-ending money… is it really just luck? Or did he make a secret deal to become the most powerful YouTuber in the world? Why does he always use the number 6 in his videos? Are we being brainwashed without even knowing?!",
-      "motive": "Fake conspiracy theories go viral fast because they sound mysterious.",
-      "tacticUsed": ["Conspiracy_Theories"],
-      "tacticUsedImage": "",
-      "newsImage": "celeb_mr-beast.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": "",
+      "caption": "These 'natural' influencers are SO embarrassing without filters! 😂📸",
+      "bodyCopy": "Check out these hilarious before/after photos of influencers without makeup or filters! They look like totally different people! No wonder they need so much editing to look human!",
+      "tacticUsed": ["tricky-jokes"],
+      "newsImage": "celeb_natural.webp",
       "villain": "The_Celeb",
       "harm": [
-        "Makes people doubt the success of real influencers by saying they 'cheated' instead of working hard.",
-        "Can cause online hate and harassment toward influencers based on fake claims.",
-        "Spreads distrust in popular figures, making people believe random connections mean something bigger."
+        "Celebs use cruel humour about appearance to normalize bullying and make you feel bad about natural looks."
       ],
-      "howToSpotIt": [
-        "Does the post provide actual proof, or just weird coincidences?",
-        "Are real journalists or experts talking about this, or just conspiracy pages?",
-        "Does it try to make random details (like numbers or symbols) seem like a big secret?"
-      ],
-      "takeaway": "Just because something sounds mysterious doesn’t mean it’s true! Conspiracy theories use vague connections to make fake claims seem real. Always check facts before believing or sharing viral secrets!"
+      "takeaway": "When jokes about people's appearance get shared as \"funny\"—they can actually hurt real people and spread harmful ideas."
     },
     {
       "id": "iWndnBXrQBDbTraMIoan",
       "collection": "misinformation_cards",
-      "caption": "Doctors EXPOSED! They’ve been HIDING the cure for cancer! 🚨",
-      "bodyCopy": "A group of top doctors just CONFIRMED that a simple natural herb can CURE cancer completely—but big pharma doesn’t want you to know! They make billions selling treatments that don’t work, so they silenced the doctors who tried to tell the truth. The cure is out there, but they’re keeping it a secret to keep making money. Don’t let them fool you—wake up and spread the truth!",
-      "motive": "The person spreading this wants attention and clicks.",
-      "tacticUsed": ["Fabrication"],
-      "tacticUsedImage": "",
-      "newsImage": "biost_cancer-cure.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": "",
+      "caption": "⚠️ Using headphones while studying can hurt your brain in just one week!",
+      "bodyCopy": "New studies show headphones cause serious brain damage in just seven days! That's why smart students are switching to the \"BrainBoost Headband\" to stay safe and focus better!",
+      "tacticUsed": ["fear-mongering"],
+      "newsImage": "biost_headphones.webp",
       "villain": "The_Biost",
       "harm": [
-        "People might ignore real medical treatments and put their health at risk.",
-        "Fake claims give false hope to people dealing with serious illness.",
-        "It spreads mistrust in doctors and science, making people believe in dangerous alternatives."
+        "Biosts create fake health scares about normal activities just to sell you expensive products you don't need."
       ],
-      "howToSpotIt": [
-        "Are there real doctors and scientific studies backing this claim?",
-        "Is the post super dramatic, saying things like 'hidden cure' or 'they don’t want you to know'?",
-        "Does it attack scientists instead of giving actual proof?"
-      ],
-      "takeaway": "If a miracle cure was real, actual doctors and scientists would be using it! Be careful of fake medical claims—always check real sources before believing them."
+      "takeaway": "If health claims sound extreme and push specific products—ask real doctors before believing or buying."
     },
     {
       "id": "jpF2yvIWFUpmV9JU6rMu",
       "collection": "misinformation_cards",
-      "caption": "BREAKING: Schools are BANNING Video Games! 🚨🎮",
-      "bodyCopy": "A new law could ban video games for kids under 14—for good! Some schools say gaming is as bad as smoking, claiming it rots your brain and makes kids fail in school. Politicians are already discussing age restrictions for Fortnite, Minecraft, and Roblox, and if they pass the law, you might NEVER be able to play your favorite games again! Teachers and parents say it’s for your own good, but they’re just hiding the truth—they want to control what kids do for fun!",
-      "motive": "Some anti-gaming groups push fear to make parents demand restrictions.",
-      "tacticUsed": ["Cherry-picking", "Fear-mongering"],
-      "tacticUsedImage": "",
-      "newsImage": "olig_video-game.jpg",
-      "newsLogoImage": "",
-      "qrCodeImage": "",
-      "video": "",
-      "villain": "The_Olig",
+      "caption": "MrBeast's SECRET CONNECTION to the Illuminati EXPOSED! 👀🕶️",
+      "bodyCopy": "Strange symbols in MrBeast's videos prove he's part of the Illuminati! His massive success and endless money isn't luck—it's a secret deal! Are we being brainwashed without knowing?",
+      "tacticUsed": ["conspiracy-theory", "fear-mongering"],
+      "newsImage": "biost_illuminati.webp",
+      "villain": "The_Biost",
       "harm": [
-        "Cherry-picks extreme claims about gaming being bad while ignoring benefits like problem-solving, teamwork, and creativity.",
-        "Scares kids into believing their favorite games will be banned, even though no real law exists.",
-        "Makes kids distrust adults by painting teachers and parents as villains instead of explaining the full picture."
+        "Biosts spread wild conspiracy theories with zero evidence to create fear and confusion about popular figures."
       ],
-      "howToSpotIt": [
-        "Are real gaming companies, schools, or news sources talking about this, or just random accounts?",
-        "Does the post only mention the bad side of gaming while ignoring research on how games help kids learn?",
-        "Is it using dramatic language to make you panic, instead of providing real facts?"
-      ],
-      "takeaway": "Misinformation tricks you by showing only one side of the story and making small problems seem like huge disasters. Before freaking out, always check if the claims are actually true!"
-    },
-    {
-      "id": "r93QoGB6y4cA80HV9wPH",
-      "caption": "Frosty Fizz Chews™ are HEALTHY! Don't listen to the haters! ",
-      "bodyCopy": "Some so-called \"health experts\" want you to believe the LIE that Frosty Fizz Chews™ aren't good for you. eg But did you know that our candy is made with natural fruit flavors and contains essential vitamins?\nCritics who say sugar is harmful are just spreading\nmisinformation-don't fall for it! The truth is, Frosty Fizz Chews™ are part of a balanced lifestyle, and anyone who says otherwise just doesn't understand nutrition.",
-      "collection": "misinformation_cards",
-      "harm": [
-        "Olig uses gaslighting ads to make junk food like Frosty Fizz Chews™ look \"healthy\" and shame anyone who questions it."
-      ],
-      "tacticUsed": ["Gaslighting"],
-      "takeaway": "If they only brag about vitamins but hide the sugar, or shut down critics—it's classic Olig.\nDon't fall for the snack spin—trust real facts!",
-      "newsImage": "olig_frosty.jpg",
-      "villain": "The_Olig"
-    },
-    {
-      "id": "uXqClCw5YNPkDgjmuJqx",
-      "caption": "SCIENCE PROVES: Vaping is WAY SAFER than smoking! 🚀",
-      "bodyCopy": "A new study just confirmed that vaping is 95% safer than smoking! Unlike cigarettes, vapes don’t contain tar or most of the harmful chemicals in tobacco, meaning you won’t get lung cancer from vaping. Some experts even say that vaping can help people quit smoking for good! So why are schools and governments trying to ban it? Maybe they just don’t want you to know the truth… 🤔",
-      "collection": "misinformation_cards",
-      "harm": [
-        "Ignores other studies that show vaping can damage lungs, affect brain development, and be addictive.",
-        "Makes young people think vaping is completely safe, leading them to start using it without knowing the risks.",
-        "Creates distrust in real health experts who warn about the actual dangers of vaping."
-      ],
-      "howToSpotIt": [
-        "Does the post mention the full study, or just the 'safe' parts?",
-        "Are real doctors and health experts supporting this claim?",
-        "Does it ignore the risks of nicotine addiction, lung disease, and chemical exposure?"
-      ],
-      "motive": "Vape companies want more young people to start vaping, so they only share the 'safe' parts of studies.",
-      "newsImage": "biost_vape.jpg",
-      "tacticUsed": ["Cherry-picking"],
-      "takeaway": "Just because something is 'safer' than another harmful thing doesn’t mean it’s safe! Cherry-picking hides the full truth—always look at the complete research before believing health claims!",
-      "villain": "The_Biost"
+      "takeaway": "If it's all weird patterns with no expert facts or real proof—don't fall for it."
     },
     {
       "id": "xrX3ZpuJz21yUVAsdWiw",
       "caption": "SHOCKING! Billie Eilish ADMITS she lip-syncs EVERYTHING! 😱",
-      "bodyCopy": "A viral video is spreading FAST—Billie Eilish is caught on camera saying, 'I don’t even sing live anymore. It’s all fake.' Fans are freaking out, calling her a fraud. Has Billie been lying to everyone this whole time?!",
+      "bodyCopy": "A viral video shows Billie Eilish saying, \"I don't even sing live anymore. It's all fake.\" Fans are calling her a complete fraud. Has she been lying to us all!?",
       "collection": "misinformation_cards",
       "harm": [
-        "Fans might lose trust in their favorite artists based on a lie.",
-        "People who believe the fake video could spread more misinformation.",
-        "Billie Eilish’s reputation could be damaged for no reason."
+        "Fans feel betrayed by their favorite idol while Billie gets blamed for something completely fake."
       ],
-      "howToSpotIt": [
-        "Does the video look unnatural? Do the lips and voice seem weird or off?",
-        "Is it from a real news source, or just a random viral account?",
-        "Check if Billie or her team has responded—if it's real, major news outlets would cover it!"
+      "newsImage": "bots_billie-eilish.webp",
+      "tacticUsed": ["deepfakes"],
+      "takeaway": "If the video looks sus with weird glitches and real news isn't covering it, it's probably fake.",
+      "villain": "The_Bots"
+    },
+    {
+      "id": "r93QoGB6y4cA80HV9wPH",
+      "caption": "New vitamin makes you super smart — everyone loves it! 🧠💊",
+      "bodyCopy": "This amazing vitamin makes you super smart! Tons of kids in the comments say it changed their lives! Don't worry about negative reviews—those people are just jealous!",
+      "collection": "misinformation_cards",
+      "harm": [
+        "Bots create fake accounts with glowing reviews to trick you into buying products that don't work."
       ],
-      "motive": "The creator of the fake video wants likes, shares, and views.",
-      "newsImage": "celeb_bilie.png",
-      "tacticUsed": ["Deepfakes"],
-      "takeaway": "Don’t believe everything you see, even if it looks real. AI can fake videos to make people say things they never said! Always double-check before sharing.",
+      "tacticUsed": ["sock-puppetry"],
+      "takeaway": "If you see tons of similar comments or only positive reviews—ask trusted adults before buying.",
+      "newsImage": "bots_vitamin.webp",
+      "villain": "The_Bots"
+    },
+    {
+      "id": "uXqClCw5YNPkDgjmuJqx",
+      "caption": "URGENT: Your favorite influencers are LEAVING TikTok forever! Don't get left behind! 😨💔",
+      "bodyCopy": "Top creators are secretly moving to a new exclusive app called \"StarVault\"! If you don't join NOW, you'll lose access to your faves forever! Only 24 hours left to get in!",
+      "harm": [
+        "Celebs create fake urgency about losing access to stars, scaring you into joining sketchy apps or paying money."
+      ],
+      "newsImage": "celeb_influencers.webp",
+      "tacticUsed": ["fear-mongering"],
+      "takeaway": "When posts scare you about missing celebrities forever—pause and check if the threat is actually real first.",
       "villain": "The_Celeb"
     },
     {
       "id": "zYhrYzkZ21RFmM2LRL2s",
       "caption": "😱 LEAKED: Logan Paul ADMITS his giveaways are FAKE! 🚨 Watch before it's deleted!",
-      "bodyCopy": "A shocking video just dropped—Logan Paul is caught on camera saying: 'I don’t actually give away real money, it’s all fake for views.' Fans are freaking out, saying he’s been lying to everyone this whole time! Some people are even unsubscribing from his channel! But is this real… or just another internet trick?",
+      "bodyCopy": "A shocking video shows Logan Paul saying his giveaways are fake! But it's actually a deepfake—AI changed his voice and face completely! Now bots are spreading it everywhere! ",
       "collection": "misinformation_cards",
       "harm": [
-        "Deepfake videos spread false accusations, damaging someone’s reputation.",
-        "Clickbait headlines trick fans, making them react emotionally before checking if it’s true.",
-        "Can cause people to lose trust in their favorite creators over something that never even happened."
+        "Bots combine fake videos and clickbait headlines to create viral scandals that ruin reputations for profit."
       ],
-      "howToSpotIt": [
-        "Does the video look unnatural, like his lips and words don’t match?",
-        "Has Logan Paul responded to this, or is it only spreading through random accounts?",
-        "Are trusted news sources covering this, or just clickbait pages?"
-      ],
-      "motive": "Fake news accounts create scandals for views, likes, and shares.",
-      "newsImage": "bot_logan-paul.jpg",
-      "tacticUsed": ["Deepfakes", "Clickbait"],
-      "takeaway": "Deepfakes and clickbait can make anyone look guilty of something they never did! Always check real sources before believing viral 'exposed' videos.",
+      "newsImage": "bots_logan-paul.webp",
+      "tacticUsed": ["deepfakes", "clickbait"],
+      "takeaway": "If the video looks off and no real news covers it—don't share the drama! ",
       "villain": "The_Bots"
     }
   ]

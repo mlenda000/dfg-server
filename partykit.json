@@ -2,9 +2,5 @@
   "$schema": "https://www.partykit.io/schema.json",
   "name": "dfg-server",
   "main": "src/server.ts",
-  "compatibilityDate": "2025-02-06",
-  "serve": {
-    "path": "public",
-    "build": "src/client.ts"
-  }
+  "compatibilityDate": "2025-02-06"
 }
