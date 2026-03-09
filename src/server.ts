@@ -60,6 +60,14 @@ export default class Server implements Party.Server {
       this.scoredRounds.delete(roomName);
       this.roomRounds.delete(roomName);
 
+      // Clear any active ready countdown timers for this room (keyed as "room:playerId")
+      for (const [key, timer] of this.readyCountdownTimers) {
+        if (key.startsWith(`${roomName}:`)) {
+          clearTimeout(timer);
+          this.readyCountdownTimers.delete(key);
+        }
+      }
+
       // Broadcast room deletion to all clients in this room (if any still connected)
       this.room.broadcast(
         JSON.stringify({
@@ -154,6 +162,15 @@ export default class Server implements Party.Server {
   roomRounds: Map<string, number> = new Map(); // Track last scored round per room
   // Map connection IDs to player IDs for consistent identification
   connectionToPlayerId: Map<string, string> = new Map();
+  // Timers for ready countdown (per room)
+  readyCountdownTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  // Store completed game results for teacher-created rooms
+  gameResults: Array<{
+    roomName: string;
+    teacherId: string;
+    players: { name: string; score: number; avatar: string }[];
+    completedAt: number;
+  }> = [];
 
   getPlayers() {
     return this.players;
@@ -165,6 +182,32 @@ export default class Server implements Party.Server {
 
   getInfluencerCards() {
     return this.influencerCard;
+  }
+
+  // Check if all players in a room are ready, and if so, trigger end-of-round scoring.
+  // Called after forceReady / readyCountdown to avoid relying on client-side detection.
+  private checkAndTriggerEndOfRound(roomName: string): void {
+    const gameRoom = this.gameRooms.get(roomName);
+    if (!gameRoom) return;
+
+    const allReady =
+      gameRoom.players.length > 0 && gameRoom.players.every((p) => p.isReady);
+    if (!allReady) return;
+
+    // Trigger the scoring + round-advance logic by routing an endOfRound
+    // message through the existing handler with a stub connection
+    const endOfRoundMsg = JSON.stringify({
+      type: "endOfRound",
+      room: roomName,
+      players: gameRoom.players,
+      round: gameRoom.currentRound,
+    });
+
+    this.onMessage(endOfRoundMsg, {
+      id: "server-force-ready",
+      send: () => {},
+      close: () => {},
+    } as unknown as Party.Connection);
   }
 
   //update this to put everyone in a lobbyRoom
@@ -196,7 +239,7 @@ export default class Server implements Party.Server {
         this.room.broadcast(
           JSON.stringify({
             type: "",
-            room: this.room,
+            room: this.room.id,
             roomCount: this.players.length,
           }),
           [conn.id],
@@ -245,6 +288,40 @@ export default class Server implements Party.Server {
             }),
           );
           break;
+        case "observeRoom": {
+          // Teacher observing a room — send current room state without joining as player
+          const observeRoomName = parsedContent.roomName;
+          const observeGameRoom = this.gameRooms.get(observeRoomName);
+          if (observeGameRoom) {
+            sender.send(
+              JSON.stringify({
+                type: "roomUpdate",
+                room: observeRoomName,
+                count: observeGameRoom.count,
+                players: observeGameRoom.players,
+                deck: observeGameRoom.deck,
+                newsCard: observeGameRoom.currentNewsCard,
+                currentRound: observeGameRoom.currentRound,
+                maxRounds: observeGameRoom.maxRounds,
+                isGameOver: observeGameRoom.isGameOver,
+                themeStyle: observeGameRoom.currentTheme,
+                volumeLocked: observeGameRoom.volumeLocked,
+                musicMuted: observeGameRoom.musicMuted,
+                sfxMuted: observeGameRoom.sfxMuted,
+                musicVolume: observeGameRoom.musicVolume,
+                sfxVolume: observeGameRoom.sfxVolume,
+              }),
+            );
+          } else {
+            sender.send(
+              JSON.stringify({
+                type: "error",
+                message: `Room "${observeRoomName}" not found.`,
+              }),
+            );
+          }
+          break;
+        }
         case "enteredLobby":
           const roomCounts: Record<string, Room> = {};
 
@@ -290,7 +367,10 @@ export default class Server implements Party.Server {
             }
 
             // Get or create the GameRoom instance for proper isolation
-            const gameRoom = this.getOrCreateGameRoom(parsedContent.room);
+            // On game room instances (non-lobby), use this.room.id for consistency
+            // with the updateAudioSettings POST handler that stores settings under this.room.id
+            const gameRoomKey = this.room.id === "lobby" ? parsedContent.room : this.room.id;
+            const gameRoom = this.getOrCreateGameRoom(gameRoomKey);
 
             // --- Server-side join guards ---
 
@@ -457,6 +537,11 @@ export default class Server implements Party.Server {
                   isGameOver: gameRoom.isGameOver,
                   isInProgress: gameRoom.isInProgress,
                   count: gameRoom.count,
+                  volumeLocked: gameRoom.volumeLocked,
+                  musicMuted: gameRoom.musicMuted,
+                  sfxMuted: gameRoom.sfxMuted,
+                  musicVolume: gameRoom.musicVolume,
+                  sfxVolume: gameRoom.sfxVolume,
                 }),
               );
             }
@@ -626,6 +711,213 @@ export default class Server implements Party.Server {
             );
           }
           break;
+        case "syncTactics": {
+          // Player syncs their placed cards so force-ready can use them
+          const syncPlayerId =
+            this.connectionToPlayerId.get(sender.id) || sender.id;
+          const syncRoomName = parsedContent.room;
+          const syncGameRoom = this.gameRooms.get(syncRoomName);
+
+          if (syncGameRoom && syncPlayerId) {
+            const syncPlayer = syncGameRoom.getPlayer(syncPlayerId);
+            if (syncPlayer && !syncPlayer.isReady) {
+              syncGameRoom.updatePlayer(syncPlayerId, {
+                tacticUsed: parsedContent.tacticUsed || [],
+              });
+
+              // Sync legacy room
+              const syncLegacyRoom = this.rooms.find(
+                (r) => r.name === syncRoomName,
+              );
+              if (syncLegacyRoom) {
+                syncLegacyRoom.players = syncGameRoom.players;
+              }
+
+              // Sync global players list
+              this.players = this.players.map((p) =>
+                p.id === syncPlayerId
+                  ? { ...p, tacticUsed: parsedContent.tacticUsed || [] }
+                  : p,
+              );
+            }
+          }
+          break;
+        }
+        case "updateAudioSettings": {
+          const asRoomName = parsedContent.room;
+          const asVolumeLocked = parsedContent.volumeLocked === true;
+          const asMusicMuted = parsedContent.musicMuted === true;
+          const asSfxMuted = parsedContent.sfxMuted === true;
+          const asMusicVolume = typeof parsedContent.musicVolume === "number" ? parsedContent.musicVolume : undefined;
+          const asSfxVolume = typeof parsedContent.sfxVolume === "number" ? parsedContent.sfxVolume : undefined;
+
+          // Update lobby's registry copy
+          const asGameRoom = this.gameRooms.get(asRoomName);
+          if (asGameRoom) {
+            asGameRoom.volumeLocked = asVolumeLocked;
+            asGameRoom.musicMuted = asMusicMuted;
+            asGameRoom.sfxMuted = asSfxMuted;
+            if (asMusicVolume !== undefined) asGameRoom.musicVolume = asMusicVolume;
+            if (asSfxVolume !== undefined) asGameRoom.sfxVolume = asSfxVolume;
+          }
+
+          // Forward to the actual game room instance so players get the update
+          if (this.room.id === "lobby") {
+            try {
+              const roomStub =
+                this.room.context.parties.main.get(asRoomName);
+              roomStub
+                .fetch("/?updateAudioSettings=true", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    volumeLocked: asVolumeLocked,
+                    musicMuted: asMusicMuted,
+                    sfxMuted: asSfxMuted,
+                    musicVolume: asMusicVolume,
+                    sfxVolume: asSfxVolume,
+                  }),
+                })
+                .catch(() => {});
+            } catch {
+              // Game room instance may not exist yet
+            }
+          } else {
+            // If we're already on the game room instance,
+            // update local GameRoom and broadcast directly
+            const localRoom = this.gameRooms.get(asRoomName);
+            if (localRoom) {
+              localRoom.volumeLocked = asVolumeLocked;
+              localRoom.musicMuted = asMusicMuted;
+              localRoom.sfxMuted = asSfxMuted;
+              if (asMusicVolume !== undefined) localRoom.musicVolume = asMusicVolume;
+              if (asSfxVolume !== undefined) localRoom.sfxVolume = asSfxVolume;
+              this.room.broadcast(
+                JSON.stringify(localRoom.toRoomUpdate()),
+              );
+            }
+          }
+          break;
+        }
+        case "forceReady": {
+          // Teacher/observer forces a specific player to ready status
+          const forceRoomName = parsedContent.room;
+          const forcePlayerId = parsedContent.playerId;
+          const forceGameRoom = this.gameRooms.get(forceRoomName);
+          const forceLegacyRoom = this.rooms.find(
+            (r) => r.name === forceRoomName,
+          );
+
+          if (forceGameRoom && forcePlayerId) {
+            const player = forceGameRoom.getPlayer(forcePlayerId);
+            if (player && !player.isReady) {
+              // Mark player ready with whatever tactics they've placed (may be empty)
+              forceGameRoom.updatePlayer(forcePlayerId, {
+                isReady: true,
+                tacticUsed: player.tacticUsed || [],
+              });
+
+              // Sync legacy room
+              if (forceLegacyRoom) {
+                forceLegacyRoom.players = forceGameRoom.players;
+              }
+
+              // Sync global players list
+              this.players = this.players.map((p) =>
+                p.id === forcePlayerId
+                  ? { ...p, isReady: true, tacticUsed: player.tacticUsed || [] }
+                  : p,
+              );
+
+              // Broadcast updated player state
+              this.room.broadcast(
+                JSON.stringify({
+                  type: "playerReady",
+                  room: forceRoomName,
+                  roomData: forceGameRoom.players,
+                  sender: sender.id,
+                }),
+              );
+
+              // If all players are now ready, trigger end-of-round scoring
+              this.checkAndTriggerEndOfRound(forceRoomName);
+            }
+          }
+          break;
+        }
+        case "readyCountdown": {
+          // Teacher starts a countdown for a specific unready player
+          const countdownRoomName = parsedContent.room;
+          const countdownSeconds = parsedContent.seconds ?? 30;
+          const countdownPlayerId = parsedContent.playerId;
+          const countdownGameRoom = this.gameRooms.get(countdownRoomName);
+
+          if (countdownGameRoom && countdownPlayerId) {
+            // Broadcast countdown start to all clients (includes target playerId)
+            this.room.broadcast(
+              JSON.stringify({
+                type: "readyCountdown",
+                room: countdownRoomName,
+                seconds: countdownSeconds,
+                playerId: countdownPlayerId,
+              }),
+            );
+
+            // After the countdown, force-ready only the targeted player
+            const timerKey = `${countdownRoomName}:${countdownPlayerId}`;
+            const countdownTimer = setTimeout(() => {
+              // Re-fetch room (it may have been deleted)
+              const room = this.gameRooms.get(countdownRoomName);
+              if (!room) return;
+
+              const player = room.getPlayer(countdownPlayerId);
+              if (!player || player.isReady) return;
+
+              room.updatePlayer(countdownPlayerId, {
+                isReady: true,
+                tacticUsed: player.tacticUsed || [],
+              });
+
+              // Sync global
+              this.players = this.players.map((p) =>
+                p.id === countdownPlayerId
+                  ? {
+                      ...p,
+                      isReady: true,
+                      tacticUsed: player.tacticUsed || [],
+                    }
+                  : p,
+              );
+
+              // Sync legacy room
+              const legacyRoom = this.rooms.find(
+                (r) => r.name === countdownRoomName,
+              );
+              if (legacyRoom) {
+                legacyRoom.players = room.players;
+              }
+
+              // Broadcast final ready state
+              this.room.broadcast(
+                JSON.stringify({
+                  type: "playerReady",
+                  room: countdownRoomName,
+                  roomData: room.players,
+                  sender: "server",
+                }),
+              );
+
+              // If all players are now ready, trigger end-of-round scoring
+              this.checkAndTriggerEndOfRound(countdownRoomName);
+
+              // Clean up the timer reference
+              this.readyCountdownTimers.delete(timerKey);
+            }, countdownSeconds * 1000);
+
+            // Store timer so it can be cleaned up if room is deleted
+            this.readyCountdownTimers.set(timerKey, countdownTimer);
+          }
+          break;
+        }
         case "playerLeaves":
           // Get the player ID from connection mapping
           const leavingPlayerId =
@@ -696,6 +988,38 @@ export default class Server implements Party.Server {
             // Mark the game as ended
             endGameRoom.wasScored = true;
             endGameRoom.isGameOver = true;
+
+            // If teacher-created, send final results to the lobby
+            if (endGameRoom.teacherCreated) {
+              const resultPlayers = endGameRoom.players.map((p) => ({
+                name: p.name || "Unknown",
+                score: p.score || 0,
+                avatar: p.avatar || "",
+              }));
+              try {
+                const lobbyStub = this.room.context.parties.main.get("lobby");
+                lobbyStub
+                  .fetch(
+                    `/?notifyGameResults=${encodeURIComponent(endGameRoomName)}`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        players: resultPlayers,
+                        teacherId: endGameRoom.teacherId,
+                      }),
+                    },
+                  )
+                  .catch((err) =>
+                    console.error(
+                      "[endGame] Failed to send results to lobby:",
+                      err,
+                    ),
+                  );
+              } catch (err) {
+                console.error("[endGame] Error sending results to lobby:", err);
+              }
+            }
 
             // Clear disconnected players — game is over, no reconnection needed
             endGameRoom.disconnectedPlayers.clear();
@@ -1068,7 +1392,7 @@ export default class Server implements Party.Server {
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
         },
       });
@@ -1106,6 +1430,13 @@ export default class Server implements Party.Server {
       // verify with the actual room server before removing.
       if (url.searchParams.has("scheduleRoomDeletion")) {
         const roomName = url.searchParams.get("scheduleRoomDeletion")!;
+        const existingRoom = this.gameRooms.get(roomName);
+        // Skip auto-deletion for teacher-created rooms
+        if (existingRoom?.teacherCreated) {
+          return new Response("ok", {
+            headers: { "Access-Control-Allow-Origin": "*" },
+          });
+        }
         if (this.gameRooms.has(roomName)) {
           // Cancel any existing timer first
           this.cancelRoomDeletionTimer(roomName);
@@ -1153,6 +1484,39 @@ export default class Server implements Party.Server {
         });
       }
 
+      // A game room completed — store results for teacher-created games
+      if (url.searchParams.has("notifyGameResults")) {
+        const roomName = url.searchParams.get("notifyGameResults")!;
+        try {
+          const body = (await request.json()) as {
+            players?: { name: string; score: number; avatar: string }[];
+            teacherId?: string;
+          };
+          if (body.players && body.players.length > 0) {
+            const result = {
+              roomName,
+              teacherId: body.teacherId || "",
+              players: body.players,
+              completedAt: Date.now(),
+            };
+            this.gameResults.push(result);
+            // Broadcast to any connected admin clients (include teacherId for filtering)
+            this.room.broadcast(
+              JSON.stringify({
+                type: "gameResultsUpdated",
+                teacherId: result.teacherId,
+                gameResult: result,
+              }),
+            );
+          }
+        } catch (err) {
+          console.error("[Lobby] Failed to parse game results:", err);
+        }
+        return new Response("ok", {
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+
       // A player joined a previously empty room — cancel any pending deletion
       if (url.searchParams.has("cancelRoomDeletion")) {
         const roomName = url.searchParams.get("cancelRoomDeletion")!;
@@ -1162,14 +1526,93 @@ export default class Server implements Party.Server {
         });
       }
 
+      // Audio settings forwarded from lobby to game room instance
+      if (url.searchParams.has("updateAudioSettings")) {
+        try {
+          const body = (await request.json()) as {
+            volumeLocked?: boolean;
+            musicMuted?: boolean;
+            sfxMuted?: boolean;
+            musicVolume?: number;
+            sfxVolume?: number;
+            teacherCreated?: boolean;
+            teacherId?: string;
+          };
+          // Apply to the game room on THIS instance (the actual game room server)
+          const roomName = this.room.id;
+          const gameRoom = this.getOrCreateGameRoom(roomName);
+          gameRoom.volumeLocked = body.volumeLocked === true;
+          gameRoom.musicMuted = body.musicMuted === true;
+          gameRoom.sfxMuted = body.sfxMuted === true;
+          if (typeof body.musicVolume === "number") gameRoom.musicVolume = body.musicVolume;
+          if (typeof body.sfxVolume === "number") gameRoom.sfxVolume = body.sfxVolume;
+          if (body.teacherCreated !== undefined) {
+            gameRoom.teacherCreated = body.teacherCreated === true;
+          }
+          if (body.teacherId !== undefined) {
+            gameRoom.teacherId = body.teacherId;
+          }
+          // Broadcast updated state to all connected players
+          this.room.broadcast(JSON.stringify(gameRoom.toRoomUpdate()));
+        } catch {
+          // Ignore parse errors
+        }
+        return new Response("ok", {
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+
       // --- Client-facing POST: create a new room ---
       try {
-        const body = (await request.json()) as { roomName?: string };
+        const body = (await request.json()) as {
+          roomName?: string;
+          teacherCreated?: boolean;
+          teacherId?: string;
+          volumeLocked?: boolean;
+          musicMuted?: boolean;
+          sfxMuted?: boolean;
+          musicVolume?: number;
+          sfxVolume?: number;
+        };
         const roomName = body.roomName;
 
         if (roomName && !this.gameRooms.has(roomName)) {
           // Create the GameRoom instance
-          this.getOrCreateGameRoom(roomName);
+          const gameRoom = this.getOrCreateGameRoom(roomName);
+
+          // Mark as teacher-created if flagged and associate teacher ID
+          if (body.teacherCreated) {
+            gameRoom.teacherCreated = true;
+            gameRoom.teacherId = body.teacherId || "";
+            gameRoom.volumeLocked = body.volumeLocked === true;
+            gameRoom.musicMuted = body.musicMuted === true;
+            gameRoom.sfxMuted = body.sfxMuted === true;
+            if (typeof body.musicVolume === "number") gameRoom.musicVolume = body.musicVolume;
+            if (typeof body.sfxVolume === "number") gameRoom.sfxVolume = body.sfxVolume;
+          }
+
+          // Forward teacher settings to the game room instance so players receive them
+          if (body.teacherCreated) {
+            try {
+              const roomStub = this.room.context.parties.main.get(roomName);
+              roomStub
+                .fetch("/?updateAudioSettings=true", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    teacherCreated: true,
+                    teacherId: body.teacherId || "",
+                    volumeLocked: body.volumeLocked === true,
+                    musicMuted: body.musicMuted === true,
+                    sfxMuted: body.sfxMuted === true,
+                    musicVolume: body.musicVolume,
+                    sfxVolume: body.sfxVolume,
+                  }),
+                })
+                .catch(() => {});
+            } catch {
+              // Game room instance may not exist yet
+            }
+          }
 
           // Also add to legacy rooms array
           if (!this.rooms.find((r) => r.name === roomName)) {
@@ -1220,8 +1663,25 @@ export default class Server implements Party.Server {
     }
 
     if (request.method === "GET") {
-      // Check if this is a request for available rooms (lobby endpoint)
       const url = new URL(request.url);
+
+      // Return stored game results for teacher-created rooms
+      if (url.searchParams.get("gameResults") === "true") {
+        const teacherId = url.searchParams.get("teacherId") || "";
+        // Only return results belonging to the requesting teacher
+        const filtered = teacherId
+          ? this.gameResults.filter((r) => r.teacherId === teacherId)
+          : [];
+        return new Response(JSON.stringify({ gameResults: filtered }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      }
+
+      // Check if this is a request for available rooms (lobby endpoint)
       if (
         url.searchParams.get("availableRooms") === "true" ||
         this.room.id === "lobby"
@@ -1235,6 +1695,7 @@ export default class Server implements Party.Server {
             isFull: gameRoom.isFull,
             isInProgress: gameRoom.isInProgress,
             isGameOver: gameRoom.isGameOver,
+            teacherCreated: gameRoom.teacherCreated,
             disconnectedPlayerNames: Array.from(
               gameRoom.disconnectedPlayers.keys(),
             ),
@@ -1261,6 +1722,9 @@ export default class Server implements Party.Server {
         isFull: currentGameRoom ? currentGameRoom.isFull : false,
         isInProgress: currentGameRoom ? currentGameRoom.isInProgress : false,
         isGameOver: currentGameRoom ? currentGameRoom.isGameOver : false,
+        teacherCreated: currentGameRoom
+          ? currentGameRoom.teacherCreated
+          : false,
         disconnectedPlayerNames: currentGameRoom
           ? Array.from(currentGameRoom.disconnectedPlayers.keys())
           : [],
@@ -1276,6 +1740,77 @@ export default class Server implements Party.Server {
           "Access-Control-Allow-Origin": "*",
         },
       });
+    }
+
+    // Handle DELETE for removing teacher-created rooms
+    if (request.method === "DELETE") {
+      const url = new URL(request.url);
+      const roomName = url.searchParams.get("roomName");
+      const teacherId = url.searchParams.get("teacherId");
+
+      if (!roomName) {
+        return new Response(
+          JSON.stringify({ error: "Missing roomName parameter" }),
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
+          },
+        );
+      }
+
+      const gameRoom = this.gameRooms.get(roomName);
+      if (!gameRoom) {
+        return new Response(JSON.stringify({ error: "Room not found" }), {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      }
+
+      // Only allow deletion of teacher-created rooms by the same teacher
+      if (!gameRoom.teacherCreated || gameRoom.teacherId !== teacherId) {
+        return new Response(
+          JSON.stringify({ error: "Not authorized to delete this room" }),
+          {
+            status: 403,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
+          },
+        );
+      }
+
+      // Delete the room
+      this.cancelRoomDeletionTimer(roomName);
+      this.gameRooms.delete(roomName);
+      this.rooms = this.rooms.filter((r) => r.name !== roomName);
+
+      // Broadcast room deletion to all connected clients
+      const availableRooms = Array.from(this.gameRooms.keys());
+      this.room.broadcast(
+        JSON.stringify({
+          type: "roomDeleted",
+          roomName: roomName,
+          availableRooms: availableRooms,
+        }),
+      );
+
+      return new Response(
+        JSON.stringify({ success: true, roomName, availableRooms }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        },
+      );
     }
 
     return new Response("Method not allowed", { status: 405 });

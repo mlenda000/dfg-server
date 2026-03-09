@@ -37,6 +37,21 @@ export class GameRoom {
   scoredRounds: Set<number> = new Set();
   lastScoredRound: number = 0;
 
+  // Teacher-created rooms are exempt from auto-deletion
+  teacherCreated: boolean = false;
+
+  // ID of the teacher who created this room (for result scoping)
+  teacherId: string = "";
+
+  // Whether the teacher has locked volume controls for players in this room
+  volumeLocked: boolean = false;
+
+  // Teacher audio settings propagated to players
+  musicMuted: boolean = false;
+  sfxMuted: boolean = false;
+  musicVolume: number = 20;
+  sfxVolume: number = 50;
+
   constructor(id: string, name: string) {
     this.id = id;
     this.name = name;
@@ -94,7 +109,9 @@ export class GameRoom {
    * Check if there are disconnected players waiting to reconnect
    */
   get hasDisconnectedPlayers(): boolean {
-    return this.disconnectedPlayers.size > 0 && this.isInProgress && !this.isGameOver;
+    return (
+      this.disconnectedPlayers.size > 0 && this.isInProgress && !this.isGameOver
+    );
   }
 
   /**
@@ -263,6 +280,11 @@ export class GameRoom {
       cardIndex: this.cardIndex,
       newsCard: this.currentNewsCard,
       themeStyle: this.currentTheme,
+      volumeLocked: this.volumeLocked,
+      musicMuted: this.musicMuted,
+      sfxMuted: this.sfxMuted,
+      musicVolume: this.musicVolume,
+      sfxVolume: this.sfxVolume,
     };
   }
 

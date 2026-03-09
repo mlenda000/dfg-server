@@ -86,8 +86,14 @@ export class RoomManager {
 
   /**
    * Schedule room deletion after the configured delay
+   * Teacher-created rooms are exempt from auto-deletion
    */
   scheduleRoomDeletion(roomName: string): void {
+    const gameRoom = this.gameRooms.get(roomName);
+    if (gameRoom?.teacherCreated) {
+      return; // Never auto-delete teacher-created rooms
+    }
+
     // Cancel any existing timer
     this.cancelRoomDeletionTimer(roomName);
 
@@ -188,9 +194,9 @@ export class RoomManager {
     const removed = gameRoom.removePlayer(playerId);
 
     // Schedule deletion when no active connections remain
-    // (server.ts handles the reconnection grace period for disconnected players separately)
+    // Teacher-created rooms are exempt from auto-deletion
     let scheduledDeletion = false;
-    if (gameRoom.hasNoActivePlayers) {
+    if (gameRoom.hasNoActivePlayers && !gameRoom.teacherCreated) {
       this.scheduleRoomDeletion(roomName);
       scheduledDeletion = true;
     }
