@@ -369,7 +369,8 @@ export default class Server implements Party.Server {
             // Get or create the GameRoom instance for proper isolation
             // On game room instances (non-lobby), use this.room.id for consistency
             // with the updateAudioSettings POST handler that stores settings under this.room.id
-            const gameRoomKey = this.room.id === "lobby" ? parsedContent.room : this.room.id;
+            const gameRoomKey =
+              this.room.id === "lobby" ? parsedContent.room : this.room.id;
             const gameRoom = this.getOrCreateGameRoom(gameRoomKey);
 
             // --- Server-side join guards ---
@@ -649,6 +650,14 @@ export default class Server implements Party.Server {
               return player;
             });
 
+            // Cancel any active countdown timer for this player — they beat it
+            const timerKey = `${parsedContent.room}:${readyPlayerId}`;
+            const existingTimer = this.readyCountdownTimers.get(timerKey);
+            if (existingTimer) {
+              clearTimeout(existingTimer);
+              this.readyCountdownTimers.delete(timerKey);
+            }
+
             // Broadcast only to players in this room
             this.room.broadcast(
               JSON.stringify({
@@ -656,6 +665,8 @@ export default class Server implements Party.Server {
                 room: parsedContent.room,
                 roomData: readyGameRoom.players,
                 sender: sender.id,
+                // Signal that a countdown for this player (if any) should be dismissed
+                cancelledCountdownPlayerId: readyPlayerId,
               }),
             );
           }
@@ -748,8 +759,14 @@ export default class Server implements Party.Server {
           const asVolumeLocked = parsedContent.volumeLocked === true;
           const asMusicMuted = parsedContent.musicMuted === true;
           const asSfxMuted = parsedContent.sfxMuted === true;
-          const asMusicVolume = typeof parsedContent.musicVolume === "number" ? parsedContent.musicVolume : undefined;
-          const asSfxVolume = typeof parsedContent.sfxVolume === "number" ? parsedContent.sfxVolume : undefined;
+          const asMusicVolume =
+            typeof parsedContent.musicVolume === "number"
+              ? parsedContent.musicVolume
+              : undefined;
+          const asSfxVolume =
+            typeof parsedContent.sfxVolume === "number"
+              ? parsedContent.sfxVolume
+              : undefined;
 
           // Update lobby's registry copy
           const asGameRoom = this.gameRooms.get(asRoomName);
@@ -757,15 +774,15 @@ export default class Server implements Party.Server {
             asGameRoom.volumeLocked = asVolumeLocked;
             asGameRoom.musicMuted = asMusicMuted;
             asGameRoom.sfxMuted = asSfxMuted;
-            if (asMusicVolume !== undefined) asGameRoom.musicVolume = asMusicVolume;
+            if (asMusicVolume !== undefined)
+              asGameRoom.musicVolume = asMusicVolume;
             if (asSfxVolume !== undefined) asGameRoom.sfxVolume = asSfxVolume;
           }
 
           // Forward to the actual game room instance so players get the update
           if (this.room.id === "lobby") {
             try {
-              const roomStub =
-                this.room.context.parties.main.get(asRoomName);
+              const roomStub = this.room.context.parties.main.get(asRoomName);
               roomStub
                 .fetch("/?updateAudioSettings=true", {
                   method: "POST",
@@ -789,11 +806,10 @@ export default class Server implements Party.Server {
               localRoom.volumeLocked = asVolumeLocked;
               localRoom.musicMuted = asMusicMuted;
               localRoom.sfxMuted = asSfxMuted;
-              if (asMusicVolume !== undefined) localRoom.musicVolume = asMusicVolume;
+              if (asMusicVolume !== undefined)
+                localRoom.musicVolume = asMusicVolume;
               if (asSfxVolume !== undefined) localRoom.sfxVolume = asSfxVolume;
-              this.room.broadcast(
-                JSON.stringify(localRoom.toRoomUpdate()),
-              );
+              this.room.broadcast(JSON.stringify(localRoom.toRoomUpdate()));
             }
           }
           break;
@@ -1042,6 +1058,33 @@ export default class Server implements Party.Server {
             }
           }
           break;
+        case "unlockRoom": {
+          const unlockRoomName = parsedContent.room as string;
+          const unlockGameRoom = this.gameRooms.get(unlockRoomName);
+          if (unlockGameRoom) {
+            if (this.room.id === "lobby") {
+              // Forward to the game room instance via HTTP
+              try {
+                const roomStub =
+                  this.room.context.parties.main.get(unlockRoomName);
+                roomStub
+                  .fetch("/?unlockRoom=true", { method: "POST" })
+                  .catch(() => {});
+              } catch {
+                // Game room instance may not exist
+              }
+            } else {
+              unlockGameRoom.teacherCreated = false;
+              this.room.broadcast(
+                JSON.stringify({
+                  type: "roomUnlocked",
+                  room: unlockRoomName,
+                }),
+              );
+            }
+          }
+          break;
+        }
         case "allReady":
           const allReady = this.players.every((player) => player.isReady);
           this.room.broadcast(
@@ -1149,12 +1192,16 @@ export default class Server implements Party.Server {
               // Don't reset player state here - it will be reset when the next round starts
               // This prevents duplicate endOfRound messages from re-scoring
 
+              // Determine if this is the final round so scoreUpdate carries the correct flag
+              const isLastRound =
+                roundNumber >= (roundGameRoom?.maxRounds || 5);
+
               this.room.broadcast(
                 JSON.stringify({
                   type: "scoreUpdate",
                   room: roomKey,
                   players: updatedPlayers,
-                  isGameOver: roundGameRoom?.isGameOver || false,
+                  isGameOver: isLastRound || roundGameRoom?.isGameOver || false,
                   maxRounds: roundGameRoom?.maxRounds || 5,
                 }),
               );
@@ -1192,12 +1239,17 @@ export default class Server implements Party.Server {
                 return updated ? { ...p, ...updated } : p;
               });
 
+              // Determine if this is the final round so scoreUpdate carries the correct flag
+              const isLastRoundForced =
+                roundNumber >= (roundGameRoom?.maxRounds || 5);
+
               this.room.broadcast(
                 JSON.stringify({
                   type: "scoreUpdate",
                   room: roomKey,
                   players: forcedPlayers,
-                  isGameOver: roundGameRoom?.isGameOver || false,
+                  isGameOver:
+                    isLastRoundForced || roundGameRoom?.isGameOver || false,
                   maxRounds: roundGameRoom?.maxRounds || 5,
                 }),
               );
@@ -1217,6 +1269,44 @@ export default class Server implements Party.Server {
               if (roundGameRoom.currentRound > roundGameRoom.maxRounds) {
                 roundGameRoom.isGameOver = true;
                 roundGameRoom.wasScored = true;
+
+                // If teacher-created, send final results to the lobby immediately.
+                // Do not rely on the client's endGame message, which may never arrive
+                // if players navigate away or close the browser before dismissing.
+                if (roundGameRoom.teacherCreated) {
+                  const resultPlayers = roundGameRoom.players.map((p) => ({
+                    name: p.name || "Unknown",
+                    score: p.score || 0,
+                    avatar: p.avatar || "",
+                  }));
+                  try {
+                    const lobbyStub =
+                      this.room.context.parties.main.get("lobby");
+                    lobbyStub
+                      .fetch(
+                        `/?notifyGameResults=${encodeURIComponent(roundGameRoom.name)}`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            players: resultPlayers,
+                            teacherId: roundGameRoom.teacherId,
+                          }),
+                        },
+                      )
+                      .catch((err) =>
+                        console.error(
+                          "[endOfRound] Failed to send results to lobby:",
+                          err,
+                        ),
+                      );
+                  } catch (err) {
+                    console.error(
+                      "[endOfRound] Error sending results to lobby:",
+                      err,
+                    );
+                  }
+                }
               }
               // Prepare players for the next round
               roundGameRoom.players = roundGameRoom.players.map((p) => ({
@@ -1499,6 +1589,16 @@ export default class Server implements Party.Server {
               players: body.players,
               completedAt: Date.now(),
             };
+            // Prevent duplicate results for the same room (endOfRound saves first;
+            // endGame message from client may also arrive and should be ignored)
+            const isDuplicate = this.gameResults.some(
+              (r) => r.roomName === result.roomName,
+            );
+            if (isDuplicate) {
+              return new Response("ok", {
+                headers: { "Access-Control-Allow-Origin": "*" },
+              });
+            }
             this.gameResults.push(result);
             // Broadcast to any connected admin clients (include teacherId for filtering)
             this.room.broadcast(
@@ -1544,8 +1644,10 @@ export default class Server implements Party.Server {
           gameRoom.volumeLocked = body.volumeLocked === true;
           gameRoom.musicMuted = body.musicMuted === true;
           gameRoom.sfxMuted = body.sfxMuted === true;
-          if (typeof body.musicVolume === "number") gameRoom.musicVolume = body.musicVolume;
-          if (typeof body.sfxVolume === "number") gameRoom.sfxVolume = body.sfxVolume;
+          if (typeof body.musicVolume === "number")
+            gameRoom.musicVolume = body.musicVolume;
+          if (typeof body.sfxVolume === "number")
+            gameRoom.sfxVolume = body.sfxVolume;
           if (body.teacherCreated !== undefined) {
             gameRoom.teacherCreated = body.teacherCreated === true;
           }
@@ -1556,6 +1658,20 @@ export default class Server implements Party.Server {
           this.room.broadcast(JSON.stringify(gameRoom.toRoomUpdate()));
         } catch {
           // Ignore parse errors
+        }
+        return new Response("ok", {
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+
+      if (url.searchParams.has("unlockRoom")) {
+        const roomName = this.room.id;
+        const gameRoom = this.gameRooms.get(roomName);
+        if (gameRoom) {
+          gameRoom.teacherCreated = false;
+          this.room.broadcast(
+            JSON.stringify({ type: "roomUnlocked", room: roomName }),
+          );
         }
         return new Response("ok", {
           headers: { "Access-Control-Allow-Origin": "*" },
@@ -1587,8 +1703,10 @@ export default class Server implements Party.Server {
             gameRoom.volumeLocked = body.volumeLocked === true;
             gameRoom.musicMuted = body.musicMuted === true;
             gameRoom.sfxMuted = body.sfxMuted === true;
-            if (typeof body.musicVolume === "number") gameRoom.musicVolume = body.musicVolume;
-            if (typeof body.sfxVolume === "number") gameRoom.sfxVolume = body.sfxVolume;
+            if (typeof body.musicVolume === "number")
+              gameRoom.musicVolume = body.musicVolume;
+            if (typeof body.sfxVolume === "number")
+              gameRoom.sfxVolume = body.sfxVolume;
           }
 
           // Forward teacher settings to the game room instance so players receive them

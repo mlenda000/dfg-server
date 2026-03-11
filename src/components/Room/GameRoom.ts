@@ -285,6 +285,7 @@ export class GameRoom {
       sfxMuted: this.sfxMuted,
       musicVolume: this.musicVolume,
       sfxVolume: this.sfxVolume,
+      teacherCreated: this.teacherCreated,
     };
   }
 
