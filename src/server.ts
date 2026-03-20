@@ -18,6 +18,8 @@ import { parseContent } from "./utils/utils";
 import { GameRoom } from "./components/Room/GameRoom";
 import { RoomManager } from "./components/RoomManager";
 
+const MAX_CONNECTIONS = 100;
+
 export default class Server implements Party.Server {
   constructor(readonly room: Party.Room) {
     // Log on first instance creation (per room)
@@ -25,6 +27,9 @@ export default class Server implements Party.Server {
 
   // Counter for generating unique player IDs (instance property to avoid sharing across rooms)
   private playerIdCounter = 0;
+
+  // Per-room player counts (active + disconnected) reported by game room instances
+  private roomPlayerCounts: Map<string, number> = new Map();
 
   // Generate a unique player ID
   generatePlayerId(): string {
@@ -34,12 +39,13 @@ export default class Server implements Party.Server {
 
   // Use RoomManager for room lifecycle management (same code as tests)
   // Helper to notify the lobby server about room lifecycle changes
-  private notifyLobby(action: string, roomName: string): void {
+  private notifyLobby(action: string, roomName: string, count?: number): void {
     if (this.room.id === "lobby") return;
     try {
       const lobbyStub = this.room.context.parties.main.get("lobby");
+      const countParam = count !== undefined ? `&count=${count}` : "";
       lobbyStub
-        .fetch(`/?${action}=${encodeURIComponent(roomName)}`, {
+        .fetch(`/?${action}=${encodeURIComponent(roomName)}${countParam}`, {
           method: "POST",
         })
         .catch((err) =>
@@ -213,12 +219,31 @@ export default class Server implements Party.Server {
   //update this to put everyone in a lobbyRoom
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
     if (this.room.id === "lobby") {
+      // Compute current total: lobby WebSocket connections + game-room player slots
+      const lobbyConnections = [...this.room.getConnections()].length;
+      const roomTotal = Array.from(this.roomPlayerCounts.values()).reduce(
+        (sum, n) => sum + n,
+        0,
+      );
+      const totalConnections = lobbyConnections + roomTotal;
+      const serverFull = totalConnections >= MAX_CONNECTIONS;
+
       // Send current list of available rooms to the connecting client
       const availableRooms = Array.from(this.gameRooms.keys());
       conn.send(
         JSON.stringify({
           type: "availableRooms",
           rooms: availableRooms,
+        }),
+      );
+
+      // Also send current server capacity stats so the client can show the banner immediately
+      conn.send(
+        JSON.stringify({
+          type: "serverStats",
+          totalConnections,
+          maxConnections: MAX_CONNECTIONS,
+          serverFull,
         }),
       );
     } else {
@@ -501,6 +526,13 @@ export default class Server implements Party.Server {
 
             // Notify lobby to cancel any pending deletion timer it may have
             this.notifyLobby("cancelRoomDeletion", parsedContent.room);
+
+            // Report updated player count (active + reserved disconnected slots) to lobby
+            this.notifyLobby(
+              "updatePlayerCount",
+              gameRoomKey,
+              gameRoom.players.length + gameRoom.disconnectedPlayers.size,
+            );
 
             // Sync legacy structures
             room.players = gameRoom.players;
@@ -1413,6 +1445,14 @@ export default class Server implements Party.Server {
         room.count = foundGameRoom.count;
       }
 
+      // Report updated count (active + reserved disconnected slots) to lobby
+      // disconnectedPlayers.size is now > 0 if removed mid-game, keeping the slot reserved
+      this.notifyLobby(
+        "updatePlayerCount",
+        foundGameRoom.name,
+        foundGameRoom.players.length + foundGameRoom.disconnectedPlayers.size,
+      );
+
       // Broadcast updated room state from GameRoom
       this.room.broadcast(JSON.stringify(foundGameRoom.toRoomUpdate()));
 
@@ -1447,6 +1487,9 @@ export default class Server implements Party.Server {
       // Fallback to legacy room handling
       room.players = room.players.filter((player) => player.id !== playerId);
       room.count = room.players.length;
+
+      // Report updated count to lobby (legacy path has no disconnectedPlayers tracking)
+      this.notifyLobby("updatePlayerCount", room.name, room.count);
 
       this.room.broadcast(
         JSON.stringify({
@@ -1501,6 +1544,7 @@ export default class Server implements Party.Server {
         this.cancelRoomDeletionTimer(roomName);
         // Remove from lobby's registry
         this.gameRooms.delete(roomName);
+        this.roomPlayerCounts.delete(roomName);
         this.rooms = this.rooms.filter((r) => r.name !== roomName);
         // Broadcast to lobby clients so they remove the room tab
         this.room.broadcast(
@@ -1548,6 +1592,7 @@ export default class Server implements Party.Server {
                 ) {
                   // Room is truly empty — remove from lobby registry
                   this.gameRooms.delete(roomName);
+                  this.roomPlayerCounts.delete(roomName);
                   this.rooms = this.rooms.filter((r) => r.name !== roomName);
                   this.room.broadcast(
                     JSON.stringify({
@@ -1621,6 +1666,34 @@ export default class Server implements Party.Server {
       if (url.searchParams.has("cancelRoomDeletion")) {
         const roomName = url.searchParams.get("cancelRoomDeletion")!;
         this.cancelRoomDeletionTimer(roomName);
+        return new Response("ok", {
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+
+      // A game room reports its current player count (active + reserved disconnected slots)
+      // so the lobby can maintain an accurate global connection total.
+      if (url.searchParams.has("updatePlayerCount")) {
+        const roomName = url.searchParams.get("updatePlayerCount")!;
+        const count = parseInt(url.searchParams.get("count") ?? "0", 10);
+        if (roomName) {
+          this.roomPlayerCounts.set(roomName, isNaN(count) ? 0 : count);
+          const lobbyConnections = [...this.room.getConnections()].length;
+          const roomTotal = Array.from(this.roomPlayerCounts.values()).reduce(
+            (sum, n) => sum + n,
+            0,
+          );
+          const totalConnections = lobbyConnections + roomTotal;
+          const serverFull = totalConnections >= MAX_CONNECTIONS;
+          this.room.broadcast(
+            JSON.stringify({
+              type: "serverStats",
+              totalConnections,
+              maxConnections: MAX_CONNECTIONS,
+              serverFull,
+            }),
+          );
+        }
         return new Response("ok", {
           headers: { "Access-Control-Allow-Origin": "*" },
         });
@@ -1821,13 +1894,32 @@ export default class Server implements Party.Server {
           }),
         );
 
-        return new Response(JSON.stringify({ rooms: availableRooms }), {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
+        return new Response(
+          JSON.stringify({
+            rooms: availableRooms,
+            totalConnections:
+              [...this.room.getConnections()].length +
+              Array.from(this.roomPlayerCounts.values()).reduce(
+                (sum, n) => sum + n,
+                0,
+              ),
+            maxConnections: MAX_CONNECTIONS,
+            serverFull:
+              [...this.room.getConnections()].length +
+                Array.from(this.roomPlayerCounts.values()).reduce(
+                  (sum, n) => sum + n,
+                  0,
+                ) >=
+              MAX_CONNECTIONS,
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
           },
-        });
+        );
       }
 
       // Return current room state (players in this room)
@@ -1907,6 +1999,7 @@ export default class Server implements Party.Server {
       // Delete the room
       this.cancelRoomDeletionTimer(roomName);
       this.gameRooms.delete(roomName);
+      this.roomPlayerCounts.delete(roomName);
       this.rooms = this.rooms.filter((r) => r.name !== roomName);
 
       // Broadcast room deletion to all connected clients
